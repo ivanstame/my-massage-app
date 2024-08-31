@@ -1,0 +1,6 @@
+"scripts": {
+  "start": "node server/server.js",
+  "server": "nodemon server/server.js",
+  "client": "react-scripts start",
+  "dev": "concurrently \"npm run server\" \"npm run client\""
+}
