@@ -1,0 +1,112 @@
+const express = require('express');
+const router = express.Router();
+const User = require('../models/User');
+const authMiddleware = require('../middleware/authMiddleware');
+
+// POST /api/users/register (Register a new user)
+router.post('/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    const newUser = new User({ name, email, password });
+
+    await newUser.save();
+    res.status(201).json({ message: 'User registered successfully', user: newUser });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ message: 'Error registering user' });
+  }
+});
+
+// POST /api/users/login (Log in a user)
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user || !(await user.comparePassword(password))) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    // Generate a token and return it
+    const token = user.generateAuthToken();
+    res.json({ token });
+  } catch (error) {
+    console.error('Error logging in:', error);
+    res.status(500).json({ message: 'Error logging in' });
+  }
+});
+
+// GET /api/users/profile (Get user profile)
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    console.log('Profile request received for user:', req.user.id);
+    console.log('User object from request:', JSON.stringify(req.user, null, 2));
+    
+    if (!req.user) {
+      console.log('User not found in request');
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Remove the password field from the user object
+    const { password, ...userWithoutPassword } = req.user.toObject();
+    
+    console.log('User profile found:', JSON.stringify(userWithoutPassword, null, 2));
+    res.json(userWithoutPassword);
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ message: 'Error fetching profile', error: error.message });
+  }
+});
+
+// PUT /api/users/profile (Update user profile)
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    console.log('Profile update request received:', req.body);
+
+    // Find the user by ID
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update the user's profile directly with the request body
+    const updatedFields = [
+      'fullName', 'phoneNumber', 'address', 'pressurePreference',
+      'injuryHistory', 'allergies', 'emergencyContact', 'preferredAromatherapy'
+    ];
+
+    updatedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        user.profile[field] = req.body[field];
+      }
+    });
+
+    await user.save();
+
+    res.status(200).json({ message: 'Profile updated successfully', user });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ message: 'Error updating profile' });
+  }
+});
+
+
+
+// GET /api/users/:id (Get user by ID - Admin)
+router.get('/:id', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Error fetching user' });
+  }
+});
+
+module.exports = router;
+
+
+

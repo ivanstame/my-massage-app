@@ -1,0 +1,160 @@
+
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const authMiddleware = require('../middleware/authMiddleware');  // Correct import
+
+// @route   POST api/auth/register
+// @desc    Register user
+// @access  Public
+
+router.post('/register', async (req, res) => {
+  console.log('Register request received:', req.body);
+  const { email, password } = req.body;
+
+  try {
+    let user = await User.findOne({ email });
+
+    if (user) {
+      console.log('User already exists');
+      return res.status(400).json({ msg: 'User already exists' });
+    }
+
+    user = new User({
+      email,
+      password
+    });
+
+    await user.save();
+
+    const payload = {
+      user: {
+        id: user._id.toString()  // Explicitly convert to string
+      }
+    };
+
+    jwt.sign(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn: 3600 },
+      (err, token) => {
+        if (err) throw err;
+        console.log('User registered successfully');
+        res.json({ token });
+      }
+    );
+  } catch (err) {
+    console.error('Registration error:', err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// @route   POST api/auth/admin-login
+// @desc    Admin login & get token
+// @access  Public
+
+router.post('/admin-login', (req, res) => {
+  console.log('Entire request object:', req);
+  console.log('Request body:', req.body);
+  console.log('Request headers:', req.headers);
+
+  // Always return success for testing
+  const payload = {
+    user: {
+      id: 'admin',
+      isAdmin: true
+    }
+  };
+
+  jwt.sign(
+    payload,
+    process.env.JWT_SECRET,
+    { expiresIn: '1d' },
+    (err, token) => {
+      if (err) {
+        console.error('JWT Sign Error:', err);
+        return res.status(500).json({ msg: 'Server error' });
+      }
+      console.log('Admin logged in successfully');
+      res.json({ token });
+    }
+  );
+});
+
+router.post('/login', async (req, res) => {
+  console.log('Login request received:', req.body);
+  const { email, password } = req.body;
+
+  try {
+    let user = await User.findOne({ email });
+    console.log('Database query result:', user ? 'User found' : 'User not found');
+
+    if (!user) {
+      console.log('Invalid credentials - user not found');
+      return res.status(400).json({ msg: 'Invalid Credentials' });
+    }
+
+    console.log('Attempting password comparison');
+    console.log('Input password:', password);
+    console.log('Stored hashed password:', user.password);
+    
+    const isMatch = await bcrypt.compare(password, user.password);
+    console.log('Password comparison result:', isMatch);
+
+    if (!isMatch) {
+      console.log('Invalid credentials - password does not match');
+      console.log('bcrypt.compare returned:', isMatch);
+      return res.status(400).json({ msg: 'Invalid Credentials' });
+    }
+
+    const payload = {
+      user: {
+        id: user.id
+      }
+    };
+
+    console.log('Creating JWT with payload:', payload);
+
+    jwt.sign(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn: 86400 },  // 24 hours in seconds
+      (err, token) => {
+        if (err) {
+          console.error('JWT Sign Error:', err);
+          throw err;
+        }
+        console.log('Login successful - JWT created');
+        res.json({ token });
+      }
+    );
+  } catch (err) {
+    console.error('Login error:', err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// @route   GET api/auth/user
+// @desc    Get logged in user
+// @access  Private
+
+router.get('/user', authMiddleware, async (req, res) => {
+  try {
+    // req.user should be set by the authMiddleware
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+module.exports = router;
+
+
+
