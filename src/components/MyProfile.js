@@ -25,7 +25,18 @@ const STATES = [
 ];
 
 const MyProfile = () => {
-  const { user } = useContext(AuthContext);
+  const { user, loading } = useContext(AuthContext);
+  const [preferencesLoading, setPreferencesLoading] = useState(true); // New loading state for preferences
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+  
+  if (!user) {
+    return <div>No user found. Please log in.</div>;
+  }
+  
+
 
   // We'll try to rely on user from AuthContext first.
   const [profile, setProfile] = useState(null);
@@ -66,75 +77,55 @@ const MyProfile = () => {
 
   // If user is available from AuthContext and we haven't set profile yet, use it
   useEffect(() => {
-    if (user) {
-      setProfile(user);
-      setFormData({
-        fullName: user.profile?.fullName || '',
-        email: user.email || '',
-        phoneNumber: user.profile?.phoneNumber || '',
-        address: user.profile?.address || {
-          street: '',
-          unit: '',
-          city: '',
-          state: '',
-          zip: ''
-        },
-        emergencyContact: user.profile?.emergencyContact || {
-          name: '',
-          phone: ''
-        },
-        allergies: user.profile?.allergies || '',
-        medicalConditions: user.profile?.medicalConditions || '',
-        treatmentPreferences: user.profile?.treatmentPreferences || {
-          bodyAreas: {}
-        }
-      });
-      setIsLoading(false);
-    } else {
-      // If user not available yet in AuthContext, fetch using session cookie
-      const fetchProfile = async () => {
-        try {
-          const response = await fetch('/api/users/profile', {
-            method: 'GET',
-            credentials: 'include' // use session cookie, no Bearer token
-          });
+    const synchronizePreferences = async () => {
+      if (loading) return;
       
-          if (response.ok) {
-            const userData = await response.json();
-            setProfile(userData);
-            
-            setFormData({
-              fullName: userData.profile?.fullName || '',
-              email: userData.email || '',
-              phoneNumber: userData.profile?.phoneNumber || '',
-              address: userData.profile?.address || {
-                street: '',
-                unit: '',
-                city: '',
-                state: '',
-                zip: ''
-              },
-              emergencyContact: userData.profile?.emergencyContact || {
-                name: '',
-                phone: ''
-              },
-              allergies: userData.profile?.allergies || '',
-              medicalConditions: userData.profile?.medicalConditions || '',
-              treatmentPreferences: userData.profile?.treatmentPreferences || {
-                bodyAreas: {}
-              }
-            });
+      try {
+        setPreferencesLoading(true);
+        
+        const response = await fetch('/api/users/profile', {
+          credentials: 'include'
+        });
+        
+        if (!response.ok) throw new Error('The universe rejected our request');
+        
+        const userData = await response.json();
+        
+        // RIGHT HERE - THIS EXACT FUCKING SPOT
+        // Replace this entire setFormData call with this exact code:
+        setFormData(prev => ({
+          fullName: userData.profile?.fullName || '',
+          email: userData.email || '',
+          phoneNumber: userData.profile?.phoneNumber || '',
+          address: userData.profile?.address || {
+            street: '',
+            unit: '',
+            city: '',
+            state: '',
+            zip: ''
+          },
+          emergencyContact: userData.profile?.emergencyContact || {
+            name: '',
+            phone: ''
+          },
+          allergies: userData.profile?.allergies || '',
+          medicalConditions: userData.profile?.medicalConditions || '',
+          treatmentPreferences: {
+            bodyAreas: userData.profile?.treatmentPreferences?.bodyAreas || {}
           }
-        } catch (error) {
-          console.error('Error fetching profile:', error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      
-      fetchProfile();
-    }
-  }, [user]);
+        }));
+        
+        setProfile(userData);
+      } catch (error) {
+        console.error('Reality glitch:', error);
+      } finally {
+        setPreferencesLoading(false);
+      }
+    };
+
+    synchronizePreferences();
+  }, [loading]);
+  
 
   useEffect(() => {
     console.log('Profile updated:', profile);
@@ -260,13 +251,14 @@ const MyProfile = () => {
     }
   };
 
-  if (isLoading) {
+  if (loading || preferencesLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-slate-600">Loading...</div>
+        <div className="text-lg text-slate-600">Loading your profile...</div>
       </div>
     );
   }
+  
 
   console.log('Profile in MyProfile:', profile);
 
@@ -533,11 +525,11 @@ const MyProfile = () => {
         />
       </ProfileSection>
 
-      {/* Treatment Preferences Section */}
-      <div className="mt-8">
-  <h2 className="text-xl font-bold text-slate-900 mb-4">Treatment Preferences (Debug Mode)</h2>
-  {profile?.profile?.treatmentPreferences?.bodyAreas ? (
-    Object.entries(profile.profile.treatmentPreferences.bodyAreas).map(([areaId, areaData]) => (
+{/* Treatment Preferences Section */}
+<div className="mt-8">
+  <h2 className="text-xl font-bold text-slate-900 mb-4">Treatment Preferences</h2>
+  {formData.treatmentPreferences?.bodyAreas && Object.keys(formData.treatmentPreferences.bodyAreas).length > 0 ? (
+    Object.entries(formData.treatmentPreferences.bodyAreas).map(([areaId, areaData]) => (
       <div key={areaId} className="border p-4 rounded mb-4">
         <h4 className="font-medium text-slate-900 capitalize">{areaId.replace(/_/g, ' ')}</h4>
         <p className="text-sm text-slate-500">Pressure: {areaData.pressure ?? 50}</p>
@@ -551,9 +543,10 @@ const MyProfile = () => {
       </div>
     ))
   ) : (
-    <p className="text-sm text-slate-500 italic">No treatment preferences set.</p>
+    <p className="text-sm text-slate-500 italic">No treatment preferences found.</p>
   )}
 </div>
+
 
 
     </div>

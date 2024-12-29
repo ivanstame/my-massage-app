@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import MonthCalendar from './MonthCalendar';
-import { convertTo12Hour } from '../utils/timeUtils';
 
 const MobileDatePicker = ({ selectedDate, onDateChange, events }) => {
   const scrollRef = useRef(null);
   const [month, setMonth] = useState(selectedDate.getMonth());
   const [year, setYear] = useState(selectedDate.getFullYear());
+  const [availabilityData, setAvailabilityData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Generate dates for current month
+  // Temporal reality check - what days exist in our chosen slice of time?
   const getDaysInMonth = (year, month) => {
     const date = new Date(year, month, 1);
     const days = [];
@@ -24,7 +25,28 @@ const MobileDatePicker = ({ selectedDate, onDateChange, events }) => {
   ];
 
   const dates = getDaysInMonth(year, month);
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // The great availability hunt
+  useEffect(() => {
+    const fetchMonthAvailability = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(`/api/availability/month/${year}/${month + 1}`);
+        if (!response.ok) throw new Error('Failed to fetch availability');
+        const data = await response.json();
+        setAvailabilityData(data);
+      } catch (error) {
+        console.error('Failed to fetch availability:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMonthAvailability();
+  }, [month, year]);
+
+  // Auto-scroll to today's temporal coordinates
   useEffect(() => {
     if (scrollRef.current) {
       const today = new Date().getDate();
@@ -57,18 +79,21 @@ const MobileDatePicker = ({ selectedDate, onDateChange, events }) => {
     }
   };
 
-  const hasEvents = (date) => {
-    return events.some(event => {
-      const eventDate = new Date(event.date);
-      return eventDate.getDate() === date.getDate() &&
-             eventDate.getMonth() === date.getMonth() &&
-             eventDate.getFullYear() === date.getFullYear();
+  const isPastDate = (date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  };
+
+  const hasAvailability = (date) => {
+    return availabilityData.some(block => {
+      const blockDate = new Date(block.date);
+      return blockDate.toDateString() === date.toDateString();
     });
   };
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-      {/* Month selector */}
       <div className="bg-slate-700 p-4">
         <div className="flex items-center justify-between">
           <button 
@@ -93,49 +118,45 @@ const MobileDatePicker = ({ selectedDate, onDateChange, events }) => {
         </div>
       </div>
 
-      {/* Scrollable dates */}
       <div className="overflow-x-auto scrollbar-hide py-4 px-2">
         <div 
           ref={scrollRef}
           className="flex space-x-2 min-w-full px-2"
         >
           {dates.map((date) => {
+            const isPast = isPastDate(date);
             const isToday = date.toDateString() === new Date().toDateString();
             const isSelected = date.toDateString() === selectedDate.toDateString();
-            const hasEventToday = hasEvents(date);
-            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const hasSlots = !isLoading && hasAvailability(date);
 
             return (
               <button
                 key={date.toISOString()}
-                onClick={() => onDateChange(date)}
+                onClick={() => !isPast && onDateChange(date)}
+                disabled={isPast}
+                title={isPast ? "Past dates cannot be selected" : !hasSlots ? "No availability set" : ""}
                 className={`
                   flex flex-col items-center justify-center
                   min-w-[4rem] py-2 px-3 rounded-full
                   transition-all duration-200 ease-in-out
-                  ${isSelected 
-                    ? 'bg-slate-700 text-white' 
-                    : 'hover:bg-slate-100'
-                  }
+                  ${isPast ? 'text-slate-300 line-through cursor-not-allowed' : 
+                    hasSlots ? 'hover:bg-green-50' : 'text-slate-400 hover:bg-slate-100'}
+                  ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2' : ''}
                 `}
               >
-                <span className="text-xs font-medium mb-1 
-                  ${isSelected ? 'text-slate-300' : 'text-slate-500'}">
+                <span className={`text-xs font-medium mb-1 
+                  ${isSelected ? 'text-blue-600' : 'text-slate-500'}`}>
                   {dayNames[date.getDay()]}
                 </span>
-                <span className={`
-                  text-lg font-semibold
-                  ${isSelected 
-                    ? 'text-white' 
-                    : isToday 
-                      ? 'text-blue-600' 
-                      : 'text-slate-700'
-                  }
-                `}>
+                <span className={`text-lg font-semibold
+                  ${isToday ? 'text-blue-600' : ''}`}>
                   {date.getDate()}
                 </span>
-                {hasEventToday && !isSelected && (
-                  <span className="mt-1 w-1 h-1 bg-blue-500 rounded-full" />
+                {!isPast && !isLoading && !hasSlots && (
+                  <span className="text-xs italic text-slate-400">no slots</span>
+                )}
+                {!isPast && hasSlots && !isSelected && (
+                  <span className="mt-1 w-1.5 h-1.5 bg-green-500 rounded-full" />
                 )}
               </button>
             );
@@ -146,10 +167,10 @@ const MobileDatePicker = ({ selectedDate, onDateChange, events }) => {
   );
 };
 
+// The grand unifier of temporal visualization
 const ResponsiveCalendar = ({ selectedDate, onDateChange, events }) => {
   return (
     <>
-      {/* Mobile View */}
       <div className="md:hidden">
         <MobileDatePicker 
           selectedDate={selectedDate}
@@ -158,7 +179,6 @@ const ResponsiveCalendar = ({ selectedDate, onDateChange, events }) => {
         />
       </div>
 
-      {/* Desktop View */}
       <div className="hidden md:block">
         <MonthCalendar 
           selectedDate={selectedDate}

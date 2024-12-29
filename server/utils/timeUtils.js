@@ -3,10 +3,104 @@
 const { DateTime } = require('luxon');
 const { calculateTravelTime } = require('../services/mapService'); // Adjust the path as necessary
 
+//
+// HELPER FUNCTION: Calculate buffer based on group ID and location
+//
+const calculateBufferBetweenBookings = (booking1, booking2, defaultBuffer = 15, allBookings = []) => {
+  // If we don't have two real bookings, just return the default buffer
+  if (!booking1 || !booking2) {
+    return defaultBuffer;
+  }
+
+  // If both bookings share the same groupId and location, skip the in-between buffer
+  if (
+    booking1.groupId &&
+    booking2.groupId &&
+    booking1.groupId === booking2.groupId &&
+    booking1.location?.address === booking2.location?.address
+  ) {
+    return 0;
+  }
+
+  // If the first booking is flagged as "last in group," add the accumulated buffer
+  if (booking1.groupId && booking1.isLastInGroup && booking1.extraDepartureBuffer) {
+    // Count how many bookings share that groupId
+    const groupSize = allBookings.filter(b => b.groupId === booking1.groupId).length;
+    // Example: 15 minutes * groupSize + extraDepartureBuffer
+    return defaultBuffer * groupSize + booking1.extraDepartureBuffer;
+  }
+
+  // Otherwise, return the default buffer
+  return defaultBuffer;
+};
+
+//
+// HELPER FUNCTION: Validate a chain of sessions (multi-session wizard scenario)
+//
+const validateMultiSessionSlot = async (
+  startTimeString,      // e.g. "13:00"
+  sessionDurations,     // array of durations [90, 60, 120, ...]
+  bookings,
+  clientLocation,
+  earliestTime,         // e.g. 6 (6 AM)
+  latestTime            // e.g. 22 (10 PM)
+) => {
+  let currentTime = startTimeString;
+
+  for (let i = 0; i < sessionDurations.length; i++) {
+    const duration = sessionDurations[i];
+    const [hours, minutes] = currentTime.split(':').map(Number);
+
+    // Check if we're still within business hours
+    if (hours < earliestTime || hours >= latestTime) {
+      return false;
+    }
+
+    // Ensure we're on a half-hour boundary
+    if (minutes % 30 !== 0) {
+      return false;
+    }
+
+    // Calculate end time for this session
+    const totalMinutes = hours * 60 + minutes + duration;
+    const endHours = Math.floor(totalMinutes / 60);
+    const endMinutes = totalMinutes % 60;
+
+    // Check if end time is within business hours
+    if (endHours >= latestTime) {
+      return false;
+    }
+
+    // If this is the last session, see if we can fit the combined buffer
+    if (i === sessionDurations.length - 1) {
+      // Calculate the buffer based on number of sessions
+      const bufferMinutes = 15 * (sessionDurations.length - 1);
+      const withBufferMinutes = totalMinutes + bufferMinutes;
+      const bufferEndHour = Math.floor(withBufferMinutes / 60);
+      if (bufferEndHour >= latestTime) {
+        return false;
+      }
+    }
+
+    // Move currentTime to the end of this session (no middle buffer)
+    currentTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+  }
+
+  // If all sessions fit, return true
+  return true;
+};
+
+//
+// Generate time slots in half-hour increments
+//
 function generateTimeSlots(startTime, endTime, intervalMinutes, appointmentDuration) {
   const slots = [];
   let currentTime = new Date(startTime);
-  const appointmentDurationMs = appointmentDuration * 60000;
+
+  // If appointmentDuration is an array, pick the longest session as a baseline
+  const appointmentDurationMs = Array.isArray(appointmentDuration)
+    ? Math.max(...appointmentDuration) * 60000
+    : appointmentDuration * 60000;
 
   while (currentTime <= new Date(endTime.getTime() - appointmentDurationMs)) {
     slots.push(new Date(currentTime));
@@ -16,9 +110,21 @@ function generateTimeSlots(startTime, endTime, intervalMinutes, appointmentDurat
   return slots;
 }
 
-function removeOccupiedSlots(slots, bookings, appointmentDuration, bufferMinutes) {
-  const appointmentDurationMs = appointmentDuration * 60000;
-  const bufferMs = bufferMinutes * 60000;
+//
+// Remove occupied slots (considering buffer on both ends)
+//
+function removeOccupiedSlots(
+  slots, 
+  bookings, 
+  appointmentDuration, 
+  bufferMinutes, 
+  requestedGroupId = null,
+  clientLocation = null
+) {
+  // If appointmentDuration is an array, use the longest duration as a baseline
+  const appointmentDurationMs = Array.isArray(appointmentDuration)
+    ? Math.max(...appointmentDuration) * 60000
+    : appointmentDuration * 60000;
 
   return slots.filter(slot => {
     const slotStart = new Date(slot);
@@ -28,181 +134,167 @@ function removeOccupiedSlots(slots, bookings, appointmentDuration, bufferMinutes
       const bookingStart = new Date(`${booking.date.toISOString().split('T')[0]}T${booking.startTime}`);
       const bookingEnd = new Date(`${booking.date.toISOString().split('T')[0]}T${booking.endTime}`);
 
-      const occupiedStart = new Date(bookingStart.getTime() - bufferMs);
-      const occupiedEnd = new Date(bookingEnd.getTime() + bufferMs);
+      // Calculate a dynamic buffer
+      const buffer = calculateBufferBetweenBookings(
+        { groupId: requestedGroupId, location: clientLocation },
+        booking,
+        bufferMinutes,
+        bookings
+      );
+
+      const bufferTimeMs = buffer * 60000;
+      const occupiedStart = new Date(bookingStart.getTime() - bufferTimeMs);
+      const occupiedEnd = new Date(bookingEnd.getTime() + bufferTimeMs);
 
       return (slotStart < occupiedEnd && slotEnd > occupiedStart);
     });
   });
 }
 
-// async function validateSlots(slots, bookings, clientLocation, appointmentDuration, bufferMinutes, adminEndTime) {
-//   const validSlots = [];
-
-//   for (const slot of slots) {
-//     let isValid = true;
-//     const slotStart = DateTime.fromJSDate(slot);
-//     const slotEnd = slotStart.plus({ minutes: appointmentDuration });
-//     const slotEndWithBreakdown = slotEnd.plus({ minutes: bufferMinutes });
-
-//     // Find the next booking
-//     const nextBooking = bookings.find(booking => 
-//       DateTime.fromISO(`${booking.date.toISOString().split('T')[0]}T${booking.startTime}`) > slotStart
-//     );
-
-//     if (nextBooking) {
-//       const nextBookingStart = DateTime.fromISO(`${nextBooking.date.toISOString().split('T')[0]}T${nextBooking.startTime}`);
-//       const nextBookingArrivalTime = nextBookingStart.minus({ minutes: bufferMinutes });
-
-//       try {
-//         // Calculate travel time to the next booking
-//         const travelTimeMinutes = await calculateTravelTime(clientLocation, nextBooking.location, slotEndWithBreakdown.toJSDate());
-
-//         const arrivalTimeAtNext = slotEndWithBreakdown.plus({ minutes: travelTimeMinutes });
-
-//         if (arrivalTimeAtNext > nextBookingArrivalTime) {
-//           isValid = false;
-//           continue; // Skip to the next slot
-//         }
-//       } catch (error) {
-//         console.error(`Error calculating travel time for slot at ${slotStart.toISO()}:`, error);
-//         isValid = false;
-//         continue; // Skip to the next slot
-//       }
-//     }
-
-//     if (isValid) {
-//       validSlots.push(slot);
-//     }
-//   }
-
-//   return validSlots;
-// }
-async function validateSlots(slots, bookings, clientLocation, appointmentDuration, bufferMinutes, adminEndTime) {
-  console.log('Validating slots with parameters:', {
-    slotsCount: slots.length,
-    bookingsCount: bookings.length,
-    clientLocation,
-    appointmentDuration,
-    bufferMinutes,
-    adminEndTime
-  });
-
+//
+// Validate slots for final availability check
+//
+async function validateSlots(
+  slots,
+  bookings,
+  clientLocation,
+  appointmentDuration,
+  bufferMinutes,
+  adminEndTime,
+  requestedGroupId = null,
+  extraDepartureBuffer = 0
+) {
   const validSlots = [];
 
   for (const slot of slots) {
-    console.log(`\nValidating slot: ${slot.toISOString()}`);
     let isValid = true;
     const slotStart = DateTime.fromJSDate(slot);
-    const slotEnd = slotStart.plus({ minutes: appointmentDuration });
-    const slotEndWithBreakdown = slotEnd.plus({ minutes: bufferMinutes });
 
-    console.log('Slot details:', {
-      start: slotStart.toISO(),
-      end: slotEnd.toISO(),
-      endWithBreakdown: slotEndWithBreakdown.toISO()
-    });
-
-    // Find the previous and next bookings
-    const prevBooking = bookings.reverse().find(booking => 
-      DateTime.fromISO(`${booking.date.toISOString().split('T')[0]}T${booking.endTime}`) <= slotStart
-    );
-    const nextBooking = bookings.find(booking => 
-      DateTime.fromISO(`${booking.date.toISOString().split('T')[0]}T${booking.startTime}`) > slotStart
-    );
-
-    console.log('Adjacent bookings:', {
-      prevBooking: prevBooking ? `${prevBooking.date.toISOString().split('T')[0]}T${prevBooking.endTime}` : 'None',
-      nextBooking: nextBooking ? `${nextBooking.date.toISOString().split('T')[0]}T${nextBooking.startTime}` : 'None'
-    });
-
-    if (prevBooking) {
-      const prevBookingEnd = DateTime.fromISO(`${prevBooking.date.toISOString().split('T')[0]}T${prevBooking.endTime}`);
-      const travelTimeFromPrev = await calculateTravelTime(
-        prevBooking.location,
+    // Branch for multi-session arrays
+    if (Array.isArray(appointmentDuration)) {
+      const canFitChain = await validateMultiSessionSlot(
+        slotStart.toFormat('HH:mm'),
+        appointmentDuration,
+        bookings,
         clientLocation,
-        prevBookingEnd.plus({ minutes: bufferMinutes }).toJSDate()
+        6,   // earliest hour
+        22   // latest hour
+      );
+      if (!canFitChain) isValid = false;
+    } 
+    // Single-session branch
+    else {
+      const slotEnd = slotStart.plus({ minutes: appointmentDuration });
+      const reversedBookings = [...bookings].reverse();
+      const prevBooking = reversedBookings.find(booking =>
+        DateTime.fromISO(`${booking.date.toISOString().split('T')[0]}T${booking.endTime}`) <= slotStart
+      );
+      const nextBooking = bookings.find(booking =>
+        DateTime.fromISO(`${booking.date.toISOString().split('T')[0]}T${booking.startTime}`) > slotStart
       );
 
-      console.log('Travel time from previous booking:', travelTimeFromPrev, 'minutes');
-
-      const requiredArrivalTime = slotStart.minus({ minutes: 15 });
-      const actualArrivalTime = prevBookingEnd.plus({ minutes: bufferMinutes + travelTimeFromPrev });
-
-      if (actualArrivalTime > requiredArrivalTime) {
-        console.log('Slot invalid: Not enough time to arrive 15 minutes before appointment start');
-        console.log('Required arrival time:', requiredArrivalTime.toISO());
-        console.log('Actual arrival time:', actualArrivalTime.toISO());
-        isValid = false;
-        continue;
-      }
-    }
-
-    if (nextBooking) {
-      const nextBookingStart = DateTime.fromISO(`${nextBooking.date.toISOString().split('T')[0]}T${nextBooking.startTime}`);
-      const requiredDepartureTime = nextBookingStart.minus({ minutes: 15 + bufferMinutes });
-
-      console.log('Next booking details:', {
-        start: nextBookingStart.toISO(),
-        requiredDepartureTime: requiredDepartureTime.toISO()
-      });
-
-      try {
-        const travelTimeToNext = await calculateTravelTime(
+      // Check arrival buffer from previous booking
+      if (prevBooking && isValid) {
+        const prevBookingEnd = DateTime.fromISO(
+          `${prevBooking.date.toISOString().split('T')[0]}T${prevBooking.endTime}`
+        );
+        const travelTimeFromPrev = await calculateTravelTime(
+          prevBooking.location,
           clientLocation,
-          nextBooking.location,
-          slotEndWithBreakdown.toJSDate()
+          prevBookingEnd.plus({ minutes: bufferMinutes }).toJSDate()
         );
 
-        console.log('Travel time to next booking:', travelTimeToNext, 'minutes');
+        const requiredArrivalTime = slotStart.minus({ minutes: 15 });
+        const actualArrivalTime = prevBookingEnd.plus({
+          minutes: bufferMinutes + travelTimeFromPrev
+        });
 
-        const actualDepartureTime = slotEndWithBreakdown;
-
-        if (actualDepartureTime.plus({ minutes: travelTimeToNext }) > requiredDepartureTime) {
-          console.log('Slot invalid: Not enough time to reach next booking 15 minutes before it starts');
-          console.log('Required departure time:', requiredDepartureTime.toISO());
-          console.log('Actual departure time:', actualDepartureTime.toISO());
+        if (actualArrivalTime > requiredArrivalTime) {
+          console.log('[Single-Session] Slot invalid: not enough time to arrive 15 mins before start');
           isValid = false;
-          continue;
         }
-      } catch (error) {
-        console.error(`Error calculating travel time for slot at ${slotStart.toISO()}:`, error);
-        isValid = false;
-        continue;
+      }
+
+      // Check departure buffer to next booking
+      if (nextBooking && isValid) {
+        const dynamicBuffer = calculateBufferBetweenBookings(
+          { groupId: requestedGroupId, location: clientLocation },
+          nextBooking,
+          bufferMinutes,
+          bookings
+        );
+        const slotEndWithBuffer = slotEnd.plus({ minutes: dynamicBuffer });
+        const nextBookingStart = DateTime.fromISO(
+          `${nextBooking.date.toISOString().split('T')[0]}T${nextBooking.startTime}`
+        );
+        const requiredDepartureTime = nextBookingStart.minus({ minutes: 15 });
+
+        try {
+          const travelTimeToNext = await calculateTravelTime(
+            clientLocation,
+            nextBooking.location,
+            slotEndWithBuffer.toJSDate()
+          );
+          const actualDepartureTime = slotEndWithBuffer.plus({ minutes: travelTimeToNext });
+          if (actualDepartureTime > requiredDepartureTime) {
+            console.log('[Single-Session] Slot invalid: not enough time to reach next booking 15 mins before');
+            isValid = false;
+          }
+        } catch (error) {
+          console.error(`[Single-Session] Error calculating travel time for slot: ${slotStart.toISO()}`, error);
+          isValid = false;
+        }
       }
     }
 
     if (isValid) {
-      console.log('Slot is valid');
+      console.log('Slot is valid:', slotStart.toISO());
       validSlots.push(slot);
     }
   }
 
-  console.log(`Validation complete. ${validSlots.length} valid slots found.`);
   return validSlots;
 }
 
-async function getAvailableTimeSlots(adminAvailability, bookings, clientLocation, appointmentDuration, bufferMinutes) {
+//
+// The main function to retrieve open slots
+//
+async function getAvailableTimeSlots(
+  adminAvailability,
+  bookings,
+  clientLocation,
+  appointmentDuration,
+  bufferMinutes,
+  requestedGroupId = null,
+  extraDepartureBuffer = 0
+) {
   console.log('Generating slots for:', adminAvailability, 'Duration:', appointmentDuration, 'Buffer:', bufferMinutes);
 
   const startTime = new Date(`${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.start}`);
   const endTime = new Date(`${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.end}`);
 
   const slots = generateTimeSlots(startTime, endTime, 30, appointmentDuration);
-
   console.log('Generated slots:', slots.map(s => s.toTimeString().slice(0, 5)));
 
-  const slotsAfterOccupied = removeOccupiedSlots(slots, bookings, appointmentDuration, bufferMinutes);
-
+  const slotsAfterOccupied = removeOccupiedSlots(
+    slots,
+    bookings,
+    appointmentDuration,
+    bufferMinutes,
+    requestedGroupId,
+    clientLocation
+  );
   console.log('Slots after removing occupied:', slotsAfterOccupied.map(s => s.toTimeString().slice(0, 5)));
 
   const validSlots = await validateSlots(
-    slotsAfterOccupied, 
-    bookings, 
-    clientLocation, 
-    appointmentDuration, 
+    slotsAfterOccupied,
+    bookings,
+    clientLocation,
+    appointmentDuration,
     bufferMinutes,
-    endTime
+    endTime,
+    requestedGroupId,
+    extraDepartureBuffer
   );
 
   console.log('Valid slots after travel time check:', validSlots.map(s => s.toTimeString().slice(0, 5)));

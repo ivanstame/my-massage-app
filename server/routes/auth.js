@@ -178,22 +178,17 @@ router.get('/check-session', async (req, res) => {
   if (req.isAuthenticated()) {
     const freshUser = await User.findById(req.user._id);
     if (!freshUser) {
-      return res.json({
-        isAuthenticated: false,
-        user: null
-      });
+      return res.json({ isAuthenticated: false, user: null });
     }
     res.json({
       isAuthenticated: true,
-      user: freshUser.getPublicProfile()  // ensure this returns full profile
+      user: freshUser.getPublicProfile()
     });
   } else {
-    res.json({
-      isAuthenticated: false,
-      user: null
-    });
+    res.json({ isAuthenticated: false, user: null });
   }
 });
+
 
 
 // @route   GET /api/auth/check-registration

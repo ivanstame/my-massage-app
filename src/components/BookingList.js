@@ -14,24 +14,42 @@ const BookingList = () => {
   useEffect(() => {
     fetchBookings();
   }, []);
-
+  
   const fetchBookings = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/api/bookings', {
-        withCredentials: true
-      });
-
+      const response = await axios.get('/api/bookings', { withCredentials: true });
+  
       if (Array.isArray(response.data)) {
-        const now = moment();
+        const now = moment().utc();
+        
         const upcoming = response.data
-          .filter(booking => moment(booking.date).isAfter(now))
-          .sort((a, b) => moment(a.date).diff(moment(b.date)));
-        
+          .filter(booking => {
+            const bookingEnd = moment.utc(booking.date)
+              .set('hour', parseInt(booking.endTime.split(':')[0]))
+              .set('minute', parseInt(booking.endTime.split(':')[1]));
+            return bookingEnd.isAfter(now);
+          })
+          .sort((a, b) => {
+            const aEnd = moment.utc(a.date).set('hour', parseInt(a.endTime.split(':')[0])).set('minute', parseInt(a.endTime.split(':')[1]));
+            const bEnd = moment.utc(b.date).set('hour', parseInt(b.endTime.split(':')[0])).set('minute', parseInt(b.endTime.split(':')[1]));
+            return aEnd.valueOf() - bEnd.valueOf();
+          });
+  
         const past = response.data
-          .filter(booking => moment(booking.date).isSameOrBefore(now))
-          .sort((a, b) => moment(b.date).diff(moment(a.date)));
-        
+          .filter(booking => {
+            const bookingEnd = moment.utc(booking.date)
+              .set('hour', parseInt(booking.endTime.split(':')[0]))
+              .set('minute', parseInt(booking.endTime.split(':')[1]));
+            return bookingEnd.isSameOrBefore(now);
+          })
+          .sort((a, b) => {
+            const aEnd = moment.utc(a.date).set('hour', parseInt(a.endTime.split(':')[0])).set('minute', parseInt(a.endTime.split(':')[1]));
+            const bEnd = moment.utc(b.date).set('hour', parseInt(b.endTime.split(':')[0])).set('minute', parseInt(b.endTime.split(':')[1]));
+            // Sort descending
+            return bEnd.valueOf() - aEnd.valueOf();
+          });
+  
         setUpcomingBookings(upcoming);
         setPastBookings(past);
       } else {
@@ -39,7 +57,7 @@ const BookingList = () => {
       }
     } catch (error) {
       setError('Error fetching bookings');
-      console.error('Error fetching bookings:', error);
+      console.error('Time itself is broken:', error);
     } finally {
       setIsLoading(false);
     }

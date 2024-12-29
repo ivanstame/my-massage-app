@@ -1,9 +1,12 @@
+// BookingForm.js
+
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../AuthContext';
 import ResponsiveCalendar from './ResponsiveCalendar';
 import axios from 'axios';
 import { usePlacesWidget } from "react-google-autocomplete";
+import SessionConfigWizard from './SessionConfigWizard';
 
 // Simple SVG icons instead of Lucide
 const MapPinIcon = () => (
@@ -43,10 +46,15 @@ const BookingForm = () => {
   const [error, setError] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
-const [newBookingId, setNewBookingId] = useState(null);
-const [mainAddress, setMainAddress] = useState('');
-const [unit, setUnit] = useState('');
-const [fullAddress, setFullAddress] = useState('');
+  const [newBookingId, setNewBookingId] = useState(null);
+  const [mainAddress, setMainAddress] = useState('');
+  const [unit, setUnit] = useState('');
+  const [fullAddress, setFullAddress] = useState('');
+  const [groupId, setGroupId] = useState(null);
+  const [numSessions, setNumSessions] = useState(1);
+  const [sessionDurations, setSessionDurations] = useState([]);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [isConfiguringDurations, setIsConfiguringDurations] = useState(false);
 
   // Time period options
   const timePeriods = [
@@ -138,31 +146,93 @@ const [fullAddress, setFullAddress] = useState('');
     }
   }, [selectedDate, location, selectedDuration]);
 
+  // Updated handleSubmit to differentiate between single and bulk bookings
   const handleSubmit = async () => {
     try {
       const hostname = window.location.hostname;
-      const bookingUrl = `http://${hostname}:5000/api/bookings`;
       
-      const bookingData = {
-        date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`,
-        time: selectedTime.original,
-        duration: selectedDuration,
-        location: {
-          address: fullAddress,
-          lat: location.lat,
-          lng: location.lng
+      if (numSessions === 1) {
+        // Single booking
+        const bookingUrl = `http://${hostname}:5000/api/bookings`;
+        
+        const bookingData = {
+          date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`,
+          time: selectedTime.original,
+          duration: selectedDuration,
+          location: {
+            address: fullAddress,
+            lat: location.lat,
+            lng: location.lng
+          }
+          // groupId and isLastInGroup are not needed for single bookings
+        };
+        
+        const response = await axios.post(bookingUrl, bookingData, {
+          withCredentials: true
+        });
+
+        if (response.status === 201) {
+          setNewBookingId(response.data._id);
+          setBookingSuccess(true);
         }
-      };
-  
-      const response = await axios.post(bookingUrl, bookingData, {
-        withCredentials: true
-      });
-  
-      setNewBookingId(response.data._id);
-      setBookingSuccess(true);
+      } else {
+        // Bulk booking
+        const bookingUrl = `http://${hostname}:5000/api/bookings/bulk`;
+        
+        // Generate a group ID for multiple sessions
+        const sessionGroupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Calculate start times and prepare booking data for each session
+        let currentTime = selectedTime.original;
+        const bookingDataArray = sessionDurations.map((duration, index) => {
+          // Calculate end time for this session
+          const [hours, minutes] = currentTime.split(':').map(Number);
+          const totalMinutes = hours * 60 + minutes + duration;
+          const endHours = Math.floor(totalMinutes / 60);
+          const endMinutes = totalMinutes % 60;
+          const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+
+          const bookingData = {
+            date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`,
+            time: currentTime,
+            duration,
+            location: {
+              address: fullAddress,
+              lat: location.lat,
+              lng: location.lng
+            },
+            groupId: sessionGroupId,
+            isLastInGroup: index === sessionDurations.length - 1,
+            // Add accumulated buffer to last session
+            extraDepartureBuffer: index === sessionDurations.length - 1 ? 15 * (numSessions - 1) : 0
+          };
+
+          // Next session starts at the end time of current session
+          currentTime = endTime;
+          
+          return bookingData;
+        });
+
+        // Send bulk booking request
+        const response = await axios.post(bookingUrl, bookingDataArray, {
+          withCredentials: true
+        });
+
+        // Handle successful bookings
+        if (response.status === 201) {
+          setNewBookingId(response.data[0]._id); // Use first booking's ID for reference
+          setGroupId(sessionGroupId);
+          setBookingSuccess(true);
+        }
+      }
     } catch (error) {
       console.error('Error while creating booking:', error);
-      setError('Failed to create booking. Please try again.');
+      // Extract error message from backend if available
+      if (error.response && error.response.data && error.response.data.message) {
+        setError(error.response.data.message);
+      } else {
+        setError('Failed to create booking. Please try again.');
+      }
     }
   };
 
@@ -182,7 +252,7 @@ const [fullAddress, setFullAddress] = useState('');
         </div>
 
         {/* Essential Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Address Card */}
           <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200">
             <div className="flex items-center gap-2 mb-3 text-slate-700">
@@ -257,6 +327,19 @@ const [fullAddress, setFullAddress] = useState('');
             </div>
           </div>
         </div>
+
+          {/* Sessions Card */}
+          <SessionConfigWizard 
+            numSessions={numSessions}
+            setNumSessions={setNumSessions}
+            sessionDurations={sessionDurations}
+            setSessionDurations={setSessionDurations}
+            wizardStep={wizardStep}
+            setWizardStep={setWizardStep}
+            isConfiguringDurations={isConfiguringDurations}
+            setIsConfiguringDurations={setIsConfiguringDurations}
+            durations={durations}
+          />
 
         {/* Time Period Selection */}
         {mainAddress && selectedDuration && availableSlots.length > 0 && (
@@ -345,14 +428,52 @@ const [fullAddress, setFullAddress] = useState('');
                 </h3>
                 
                 <p className="text-sm text-gray-500 mb-6">
-                  Your massage session has been scheduled for{' '}
-                  {selectedDate.toLocaleDateString('en-US', { 
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric'
-                  })}{' '}
-                  at {selectedTime.formatted}.
+                  {numSessions === 1 ? (
+                    `Your massage session has been scheduled for ${selectedDate.toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })} at ${selectedTime.formatted}.`
+                  ) : (
+                    <>
+                      Your {numSessions} back-to-back sessions have been scheduled:
+                      {sessionDurations.map((duration, index) => {
+                        // Calculate start time for this session
+                        let sessionStartTime = selectedTime.original;
+                        if (index > 0) {
+                          // For sessions after the first, calculate start time based on previous durations
+                          const previousDurations = sessionDurations.slice(0, index);
+                          const totalMinutesBefore = previousDurations.reduce((sum, dur) => sum + dur, 0);
+                          const [hours, minutes] = selectedTime.original.split(':').map(Number);
+                          const totalMinutes = hours * 60 + minutes + totalMinutesBefore;
+                          const sessionHours = Math.floor(totalMinutes / 60);
+                          const sessionMinutes = totalMinutes % 60;
+                          sessionStartTime = `${String(sessionHours).padStart(2, '0')}:${String(sessionMinutes).padStart(2, '0')}`;
+                        }
+                        
+                        return (
+                          <div key={index} className="mt-2 pl-4 border-l-2 border-blue-200">
+                            <div className="font-medium">Session {index + 1}</div>
+                            <div className="text-sm">
+                              {convertTo12Hour(sessionStartTime)} • {duration} minutes
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="mt-4">
+                        Starting on {selectedDate.toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </div>
+                      <div className="mt-2 text-sm text-slate-400">
+                        Buffer time ({15 * numSessions} minutes) has been added after your final session
+                      </div>
+                    </>
+                  )}
                 </p>
 
                 <div className="space-y-3">
@@ -379,6 +500,9 @@ const [fullAddress, setFullAddress] = useState('');
                       setSelectedDuration(60);
                       setTimeOfDay(null);
                       setBookingSuccess(false);
+                      setGroupId(null);
+                      setNumSessions(1);
+                      setSessionDurations([]);
                       window.scrollTo(0, 0);
                     }}
                     className="w-full border border-slate-200 text-slate-600 py-2 px-4 rounded-lg hover:bg-slate-50 transition-colors"

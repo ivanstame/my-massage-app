@@ -2,22 +2,30 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const LocationSchema = new Schema({
+  lat: {
+    type: Number,
+    required: true,
+    min: -90,
+    max: 90,
+    validate: {
+      validator: Number.isFinite,
+      message: 'Latitude must be a valid number'
+    }
+  },
+  lng: {
+    type: Number,
+    required: true,
+    min: -180,
+    max: 180,
+    validate: {
+      validator: Number.isFinite,
+      message: 'Longitude must be a valid number'
+    }
+  },
   address: { 
     type: String, 
     required: [true, 'Address is required'],
     trim: true
-  },
-  lat: { 
-    type: Number, 
-    required: [true, 'Latitude is required'],
-    min: -90,
-    max: 90
-  },
-  lng: { 
-    type: Number, 
-    required: [true, 'Longitude is required'],
-    min: -180,
-    max: 180
   }
 });
 
@@ -56,6 +64,10 @@ const BookingSchema = new Schema({
     type: Schema.Types.ObjectId, 
     ref: 'User', 
     required: [true, 'Client reference is required']
+  },
+  groupId: {
+    type: String,
+    default: null
   },
   therapist: {
     type: Schema.Types.ObjectId,
@@ -175,7 +187,7 @@ const BookingSchema = new Schema({
 BookingSchema.index({ client: 1, date: 1 });
 BookingSchema.index({ therapist: 1, date: 1 });
 BookingSchema.index({ date: 1, status: 1 });
-BookingSchema.index({ location: '2dsphere' });
+BookingSchema.index({ 'location.lat': 1, 'location.lng': 1 });
 
 // Virtual for full appointment duration (including breakdown time)
 BookingSchema.virtual('totalDuration').get(function() {

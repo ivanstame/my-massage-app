@@ -20,6 +20,7 @@ const AdminAvailability = () => {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
+
   const fetchAvailabilityBlocks = useCallback(async (date) => {
     try {
       const response = await axios.get(`/api/availability/blocks/${date.toISOString().split('T')[0]}`, {
@@ -151,11 +152,40 @@ const AdminAvailability = () => {
     return duration.join(' and ');
   }, []);
 
+  const renderConflictInfo = useCallback(() => {
+    if (!conflictInfo) return null;
+
+    return (
+      <div className="mt-4 p-4 bg-yellow-50 border border-yellow-400 rounded">
+        <h3 className="font-semibold text-yellow-800">{conflictInfo.message}</h3>
+        <p className="mt-2 text-sm text-yellow-700">Affected appointments:</p>
+        <ul className="mt-1 text-sm">
+          {conflictInfo.conflicts.map((booking, index) => (
+            <li key={index} className="ml-4">
+              • {booking.time} - {booking.client}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-sm text-yellow-700">
+          Please contact affected clients before {conflictInfo.type === 'delete' ? 'deleting' : 'modifying'} this block.
+        </p>
+        <button 
+          onClick={() => setConflictInfo(null)}
+          className="mt-2 text-sm text-yellow-800 underline"
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  }, [conflictInfo]);
+
   const renderAvailabilityDetails = useCallback(() => {
     if (availabilityBlocks.length === 0) {
       return (
         <div className="text-center py-8 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-          <p className="text-slate-600">No availability set for this date.</p>
+          <p className="text-slate-600">
+            No availability set for {selectedDate.toLocaleDateString()}
+          </p>
           <button 
             onClick={() => setIsModalOpen(true)}
             className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md
@@ -170,127 +200,102 @@ const AdminAvailability = () => {
         </div>
       );
     }
-
+  
     return (
-        <div className="space-y-4">
-          {error && (
-            <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
+      <div className="space-y-4">
+        {error && (
+          <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
               </div>
             </div>
-          )}
-          
-          {renderConflictInfo()}
-          
-          {availabilityBlocks.map((block, index) => (
-            <div 
-              key={index} 
-              className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden
-                transition duration-200 ease-in-out hover:shadow-md"
-            >
-              <div className="p-4">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-base font-medium text-slate-900">
-                        {formatTime(block.start)} - {formatTime(block.end)}
-                      </span>
-                      <span className={`
-                        px-2.5 py-0.5 text-xs font-medium rounded-full
-                        ${block.type === 'autobook' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'}
-                      `}>
-                        {block.type}
-                      </span>
-                    </div>
-                    <p className="text-sm text-slate-500">
-                      {formatDuration(block.start, block.end)}
-                    </p>
-                  </div>
-                  
+          </div>
+        )}
+        
+        {renderConflictInfo()}
+        
+        {availabilityBlocks.map((block, index) => (
+          <div 
+            key={block._id || index} 
+            className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden
+              transition duration-200 ease-in-out hover:shadow-md"
+          >
+            <div className="p-4">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1">
                   <div className="flex items-center space-x-2">
-                    <button 
-                      onClick={() => handleModifyClick(block)}
-                      className="inline-flex items-center px-3 py-1.5 bg-white border border-slate-300
-                        text-sm font-medium rounded-md text-slate-700 hover:bg-slate-50
-                        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-                        transition-colors duration-200 ease-in-out"
-                    >
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Edit
-                    </button>
-                    
-                    <button 
-                      onClick={() => handleDeleteAvailability(block._id)}
-                      className="inline-flex items-center px-3 py-1.5 bg-white border border-red-300
-                        text-sm font-medium rounded-md text-red-700 hover:bg-red-50
-                        focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500
-                        transition-colors duration-200 ease-in-out"
-                    >
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      Delete
-                    </button>
+                    <span className="text-base font-medium text-slate-900">
+                      {formatTime(block.start)} - {formatTime(block.end)}
+                    </span>
+                    <span className={`
+                      px-2.5 py-0.5 text-xs font-medium rounded-full
+                      ${block.type === 'autobook' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'}
+                    `}>
+                      {block.type}
+                    </span>
                   </div>
+                  <p className="text-sm text-slate-500">
+                    {formatDuration(block.start, block.end)}
+                  </p>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => handleModifyClick(block)}
+                    className="inline-flex items-center px-3 py-1.5 bg-white border border-slate-300
+                      text-sm font-medium rounded-md text-slate-700 hover:bg-slate-50
+                      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+                      transition-colors duration-200 ease-in-out"
+                  >
+                    <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                  </button>
+                  
+                  <button 
+                    onClick={() => handleDeleteAvailability(block._id)}
+                    className="inline-flex items-center px-3 py-1.5 bg-white border border-red-300
+                      text-sm font-medium rounded-md text-red-700 hover:bg-red-50
+                      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500
+                      transition-colors duration-200 ease-in-out"
+                  >
+                    <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
-          ))}
-          
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white
-              rounded-md hover:bg-blue-700 transition-colors duration-200 ease-in-out 
-              focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-              shadow-sm"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            Add New Availability Block
-          </button>
-        </div>
-      );
-    }, [availabilityBlocks, error, formatTime, formatDuration, handleDeleteAvailability, handleModifyClick]);
+          </div>
+        ))}
+        
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white
+            rounded-md hover:bg-blue-700 transition-colors duration-200 ease-in-out 
+            focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+            shadow-sm"
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Add New Availability Block
+        </button>
+      </div>
+    );
+  }, [availabilityBlocks, error, selectedDate, formatTime, formatDuration, handleModifyClick, handleDeleteAvailability, renderConflictInfo]);
 
-    const renderConflictInfo = useCallback(() => {
-      if (!conflictInfo) return null;
 
-      return (
-        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-400 rounded">
-          <h3 className="font-semibold text-yellow-800">{conflictInfo.message}</h3>
-          <p className="mt-2 text-sm text-yellow-700">Affected appointments:</p>
-          <ul className="mt-1 text-sm">
-            {conflictInfo.conflicts.map((booking, index) => (
-              <li key={index} className="ml-4">
-                • {booking.time} - {booking.client}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-sm text-yellow-700">
-            Please contact affected clients before {conflictInfo.type === 'delete' ? 'deleting' : 'modifying'} this block.
-          </p>
-          <button 
-            onClick={() => setConflictInfo(null)}
-            className="mt-2 text-sm text-yellow-800 underline"
-          >
-            Dismiss
-          </button>
-        </div>
-      );
-    }, [conflictInfo]);
 
     if (!user || !user.isAdmin) {
       return null;

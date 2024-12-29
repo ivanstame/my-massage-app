@@ -19,8 +19,11 @@ import AdminAppointments from './components/AdminAppointments';
 
 const RegistrationProtectedRoute = ({ children, requiredStep }) => {
   const { user } = useContext(AuthContext);
+  
+  // Redirect admins to dashboard
+  if (user?.isAdmin) return <Navigate to="/admin" />;
+  
   const currentStep = user?.registrationStep || 1;
-
   if (currentStep < requiredStep) {
     if (currentStep === 1) return <Navigate to="/profile-setup" />;
     if (currentStep === 2) return <Navigate to="/treatment-preferences" />;
@@ -35,24 +38,12 @@ const RegistrationProtectedRoute = ({ children, requiredStep }) => {
 const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { user, loading } = useContext(AuthContext);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
-
-  if (adminOnly && !user.isAdmin) {
-    return <Navigate to="/" />;
-  }
-
-  // If registration is not complete, redirect to appropriate step
-  if (!adminOnly) {
+  if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="text-lg">Loading...</div></div>;
+  if (!user) return <Navigate to="/login" />;
+  if (adminOnly && !user.isAdmin) return <Navigate to="/" />;
+  
+  // Skip registration checks for admins
+  if (!adminOnly && !user.isAdmin) {
     const registrationStep = user.registrationStep || 1;
     if (registrationStep < 3) {
       if (registrationStep === 1) return <Navigate to="/profile-setup" />;

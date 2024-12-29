@@ -26,6 +26,27 @@ router.get('/blocks/:date', ensureAuthenticated, async (req, res) => {
   }
 });
 
+// Get availability block for spans of a month at a time
+router.get('/month/:year/:month', ensureAuthenticated, async (req, res) => {
+  try {
+    const { year, month } = req.params;
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+
+    const availabilityBlocks = await Availability.find({
+      date: {
+        $gte: startDate,
+        $lte: endDate
+      },
+      type: 'autobook'
+    }).sort({ date: 1 });
+
+    res.json(availabilityBlocks);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Create new availability (admin only)
 router.post('/', ensureAdmin, async (req, res) => {
   try {

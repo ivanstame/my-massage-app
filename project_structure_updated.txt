@@ -1,4 +1,6 @@
 .
+├── clear
+├── clear.pub
 ├── hashPassword.js
 ├── logs
 │   ├── combined.log
@@ -93,4 +95,4 @@
 ├── tailwind.config.js
 └── test-api.js
 
-19 directories, 74 files
+19 directories, 76 files

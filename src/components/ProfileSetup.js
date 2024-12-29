@@ -44,11 +44,9 @@ const ProgressIndicator = ({ currentStep }) => (
 );
 
 const ProfileSetup = () => {
-  console.log('ProfileSetup component mounting');
-
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
-
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
@@ -64,23 +62,31 @@ const ProfileSetup = () => {
   });
 
   useEffect(() => {
-    // If user is not logged in here, handle it (e.g., navigate back to registration if needed)
     if (!user) {
-      console.log('No user found in AuthContext; redirecting to signup...');
       navigate('/signup');
-    } else {
-      console.log('User found in AuthContext:', user);
+      return;
+    }
+    
+    // Redirect admins to dashboard
+    if (user.admin) {
+      navigate('/admin-dashboard');
+      return;
     }
   }, [user, navigate]);
 
+  // If user is admin, don't render the form
+  if (user?.admin) {
+    return null;
+  }
+
+  // Rest of the component remains unchanged
   const handleChange = (e) => {
-    console.log('Form field changed:', e.target.name, e.target.value);
     setFormData(prev => ({
       ...prev,
       [e.target.name]: e.target.value
     }));
   };
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     console.log('Submit triggered with formData:', formData);
