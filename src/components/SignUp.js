@@ -32,7 +32,6 @@ const SignUp = () => {
     password: '',
     confirmPassword: '',
     accountType: '',  // 'PROVIDER' or 'CLIENT'
-    businessName: '',  // for providers
     invitationToken: ''  // for invited clients
   });
 
@@ -60,7 +59,6 @@ const SignUp = () => {
           password: formData.password,
           accountType: formData.accountType,
           invitationToken: formData.invitationToken,
-          businessName: formData.businessName
         },
         {
           withCredentials: true,
@@ -151,24 +149,6 @@ const SignUp = () => {
         />
       </div>
 
-      {formData.accountType === 'PROVIDER' && (
-        <div>
-          <label htmlFor="businessName" className="block text-sm font-medium text-slate-600 mb-2">
-            Business Name
-          </label>
-          <input
-            id="businessName"
-            name="businessName"
-            type="text"
-            required
-            value={formData.businessName}
-            onChange={handleChange}
-            className="w-full px-4 py-2 border border-slate-200 rounded-md 
-              focus:outline-none focus:ring-2 focus:ring-[#387c7e]"
-            placeholder="Your business name"
-          />
-        </div>
-      )}
 
       {formData.accountType === 'CLIENT' && (
         <div>
