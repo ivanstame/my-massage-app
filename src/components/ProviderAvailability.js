@@ -6,7 +6,7 @@ import ResponsiveCalendar from './ResponsiveCalendar';
 import DaySchedule from './DaySchedule';
 import AddAvailabilityModal from './AddAvailabilityModal';
 import ModifyAvailabilityModal from './ModifyAvailabilityModal';
-import { Clock, Calendar, MapPin } from 'lucide-react';
+import { Clock, Calendar, MapPin, AlertCircle } from 'lucide-react';
 
 const ProviderAvailability = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -21,6 +21,7 @@ const ProviderAvailability = () => {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [serviceArea, setServiceArea] = useState(null);
+  const [requestState, setRequestState] = useState('INITIAL');
 
   // Get provider's service area
   useEffect(() => {
@@ -53,15 +54,27 @@ const ProviderAvailability = () => {
     }
   }, []);
 
+  const fetchData = useCallback(async (date) => {
+    try {
+      setRequestState('LOADING');
+      await Promise.all([
+        fetchAvailabilityBlocks(date),
+        fetchBookings(date)
+      ]);
+      setRequestState('SUCCESS');
+    } catch (error) {
+      console.error('Data loading error:', error);
+      setRequestState('ERROR');
+    }
+  }, [fetchAvailabilityBlocks, fetchBookings]);
+
   useEffect(() => {
     if (!user || user.accountType !== 'PROVIDER') {
       navigate('/login');
       return;
     }
-    
-    fetchAvailabilityBlocks(selectedDate);
-    fetchBookings(selectedDate);
-  }, [selectedDate, user, navigate, fetchAvailabilityBlocks, fetchBookings]);
+    fetchData(selectedDate);
+  }, [selectedDate, user, navigate, fetchData]);
 
   const handleAddAvailability = useCallback(async (newAvailability) => {
     try {
@@ -170,6 +183,32 @@ const ProviderAvailability = () => {
     return duration.join(' and ');
   }, []);
 
+  const renderLoadingState = () => (
+    <div className="text-center py-8">
+      <div className="animate-spin inline-block w-8 h-8 border-4 border-[#387c7e] border-t-transparent rounded-full mb-4" />
+      <p className="text-slate-600">Loading availability data...</p>
+    </div>
+  );
+
+  const renderErrorState = () => (
+    <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded">
+      <div className="flex items-center">
+        <svg className="h-5 w-5 text-red-400 mr-3" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+        </svg>
+        <div>
+          <p className="text-sm text-red-700">Failed to load availability data. Please try again.</p>
+          <button
+            onClick={() => fetchData(selectedDate)}
+            className="mt-2 text-sm text-red-700 underline"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderConflictInfo = useCallback(() => {
     if (!conflictInfo) return null;
 
@@ -198,6 +237,8 @@ const ProviderAvailability = () => {
   }, [conflictInfo]);
 
   const renderAvailabilityDetails = useCallback(() => {
+    if (requestState === 'LOADING') return renderLoadingState();
+    if (requestState === 'ERROR') return renderErrorState();
     if (availabilityBlocks.length === 0) {
       return (
         <div className="text-center py-8 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
@@ -331,8 +372,13 @@ const ProviderAvailability = () => {
           <div className="lg:w-1/3">
             <ResponsiveCalendar 
               selectedDate={selectedDate}
-              onDateChange={setSelectedDate}
+              onDateChange={(date) => {
+                if (requestState !== 'LOADING') {
+                  setSelectedDate(date);
+                }
+              }}
               events={availabilityBlocks}
+              disabled={requestState === 'LOADING'}
             />
             <div className="mt-4">
               <h2 className="text-xl font-semibold mb-4">Availability Details:</h2>
