@@ -44,11 +44,14 @@ const Header = () => {
       ];
     }
 
-    if (user.isAdmin) {
+    if (user.accountType === 'PROVIDER') {
       return [
-        { href: '/admin', label: 'Dashboard' },
-        { href: '/admin/availability', label: 'Availability' },
-        { href: '/admin/bookings', label: 'Bookings' }
+        { href: '/provider/dashboard', label: 'Dashboard' },
+        { href: '/provider/appointments', label: 'Appointments' },
+        { href: '/provider/availability', label: 'Availability' },
+        { href: '/provider/clients', label: 'Clients' },
+        { href: '/provider/analytics', label: 'Analytics' },
+        { href: '/provider/settings', label: 'Settings' }
       ];
     }
 
@@ -92,7 +95,7 @@ const Header = () => {
             ))}
             {user && (
               <>
-                {!user.isAdmin && (
+                {user.accountType === 'CLIENT' && (
                   <Link
                     to="/my-profile"
                     className={`${
@@ -166,7 +169,7 @@ const Header = () => {
           ))}
           {user && (
             <>
-              {!user.isAdmin && (
+              {user.accountType === 'CLIENT' && (
                 <Link
                   to="/my-profile"
                   className={`${
