@@ -7,7 +7,7 @@ import AddressForm from './AddressForm';
 import SessionConfigWizard from './SessionConfigWizard';
 import { bookingService } from '../services/bookingService';
 import api from '../services/api';
-import { Users, HourglassIcon, Clock, MapPin, AlertCircle } from 'lucide-react';
+import { Users, HourglassIcon, Clock, MapPin, AlertCircle, Check, Calendar, Info } from 'lucide-react';
 
 const convertTo12Hour = (time24) => {
   const [hours, minutes] = time24.split(':').map(Number);
@@ -347,9 +347,44 @@ const BookingForm = ({ googleMapsLoaded }) => {
           </div>
         )}
 
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div className={`flex items-center ${fullAddress ? 'text-green-600' : 'text-blue-600'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${fullAddress ? 'bg-green-100' : 'bg-blue-100'}`}>
+                {fullAddress ? <Check className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+              </div>
+              <span className="ml-2 text-sm font-medium">Location</span>
+            </div>
+            <div className={`flex-1 h-1 ${fullAddress ? 'bg-green-100' : 'bg-slate-200'}`}></div>
+            <div className={`flex items-center ${selectedDate ? 'text-green-600' : (fullAddress ? 'text-blue-600' : 'text-slate-400')}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedDate ? 'bg-green-100' : (fullAddress ? 'bg-blue-100' : 'bg-slate-100')}`}>
+                {selectedDate ? <Check className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
+              </div>
+              <span className="ml-2 text-sm font-medium">Date</span>
+            </div>
+            <div className={`flex-1 h-1 ${selectedDate ? 'bg-green-100' : 'bg-slate-200'}`}></div>
+            <div className={`flex items-center ${selectedTime ? 'text-green-600' : (selectedDate ? 'text-blue-600' : 'text-slate-400')}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedTime ? 'bg-green-100' : (selectedDate ? 'bg-blue-100' : 'bg-slate-100')}`}>
+                {selectedTime ? <Check className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+              </div>
+              <span className="ml-2 text-sm font-medium">Time</span>
+            </div>
+          </div>
+
+          {!selectedTime && (
+            <div className="mt-4 text-center text-sm text-slate-600">
+              {!fullAddress && "Start by confirming your service location"}
+              {fullAddress && !selectedDate && "Next, select a date from the calendar"}
+              {selectedDate && !selectedTime && "Finally, choose an available time slot"}
+            </div>
+          )}
+        </div>
+
         <ServiceAreaWarning />
         {/* Calendar */}
-        <div className="bg-white rounded-lg shadow-sm">
+        <div className={`bg-white rounded-lg shadow-sm relative ${
+          !fullAddress ? 'opacity-50 pointer-events-none' : ''
+        }`}>
           <ResponsiveCalendar
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
@@ -358,6 +393,11 @@ const BookingForm = ({ googleMapsLoaded }) => {
               time: slot
             }))}
           />
+          {!fullAddress && (
+            <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-lg">
+              <p className="text-slate-500">Complete location first</p>
+            </div>
+          )}
         </div>
 
         {/* 3-column layout: 1) Session or Wizard, 2) Address, 3) Single Duration if needed */}
@@ -436,6 +476,19 @@ const BookingForm = ({ googleMapsLoaded }) => {
 
           {/* (2) Address Card (traditional) */}
 {/* (2) Address Card (traditional) */}
+{!fullAddress && (
+  <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg mb-4">
+    <div className="flex items-center">
+      <Info className="w-5 h-5 text-blue-400 mr-2" />
+      <div>
+        <h3 className="font-medium text-blue-800">Required First Step</h3>
+        <p className="text-sm text-blue-700 mt-1">
+          Please confirm your service location before viewing availability
+        </p>
+      </div>
+    </div>
+  </div>
+)}
 <div className="bg-white p-4 border">
   {/* The heading we want to show for ANY address option */}
   <div className="flex items-center mb-3 border-b pb-2">
@@ -515,6 +568,9 @@ const BookingForm = ({ googleMapsLoaded }) => {
             <div className="flex items-center mb-3 border-b pb-2">
               <Clock className="w-5 h-5 text-blue-500 mr-2" />
               <h2 className="font-medium">Available Times</h2>
+              {!selectedTime && availableSlots.length > 0 && (
+                <span className="ml-2 text-sm text-blue-600">(Select a time to continue)</span>
+              )}
             </div>
 
             <div className="space-y-6">
