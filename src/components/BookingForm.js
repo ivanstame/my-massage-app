@@ -368,6 +368,93 @@ const BookingForm = ({ googleMapsLoaded }) => {
           )}
         </div>
 
+        {/* Sticky Progress Indicator */}
+        <div className="sticky top-0 z-10 bg-white py-4 mb-8 border-b border-slate-200">
+          <div className="max-w-3xl mx-auto px-4">
+            <div className="flex items-center justify-between">
+              {/* Location Step - Updated to check session config */}
+              <div className={`flex items-center ${
+                fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length) 
+                  ? 'text-green-600' 
+                  : 'text-blue-600'
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length) 
+                    ? 'bg-green-100' 
+                    : 'bg-blue-100'
+                }`}>
+                  {(fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length)) 
+                    ? <Check className="w-4 h-4" /> 
+                    : <MapPin className="w-4 h-4" />}
+                </div>
+                <span className="ml-2 text-sm font-medium">Setup</span>
+              </div>
+
+              {/* Progress Line */}
+              <div className={`flex-1 h-1 ${
+                (fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length)) 
+                  ? 'bg-green-100' 
+                  : 'bg-slate-200'
+              }`}></div>
+
+              {/* Date Step */}
+              <div className={`flex items-center ${
+                selectedDate 
+                  ? 'text-green-600' 
+                  : (fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length) 
+                      ? 'text-blue-600' 
+                      : 'text-slate-400')
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  selectedDate 
+                    ? 'bg-green-100' 
+                    : (fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length) 
+                        ? 'bg-blue-100' 
+                        : 'bg-slate-100')
+                }`}>
+                  {selectedDate ? <Check className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
+                </div>
+                <span className="ml-2 text-sm font-medium">Date</span>
+              </div>
+
+              {/* Progress Line */}
+              <div className={`flex-1 h-1 ${selectedDate ? 'bg-green-100' : 'bg-slate-200'}`}></div>
+
+              {/* Time Step */}
+              <div className={`flex items-center ${
+                selectedTime 
+                  ? 'text-green-600' 
+                  : (selectedDate 
+                      ? 'text-blue-600' 
+                      : 'text-slate-400')
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  selectedTime 
+                    ? 'bg-green-100' 
+                    : (selectedDate 
+                        ? 'bg-blue-100' 
+                        : 'bg-slate-100')
+                }`}>
+                  {selectedTime ? <Check className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                </div>
+                <span className="ml-2 text-sm font-medium">Time</span>
+              </div>
+            </div>
+
+            {/* Instructional Text */}
+            {!selectedTime && (
+              <div className="mt-4 text-center text-sm text-slate-600">
+                {!(fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length)) && 
+                  "Complete session setup and location first"}
+                {(fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length)) && !selectedDate && 
+                  "Next, select a date from the calendar"}
+                {selectedDate && !selectedTime && 
+                  "Finally, choose an available time slot"}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* 3-column layout: 1) Session or Wizard, 2) Address, 3) Single Duration if needed */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* (1) If isConfiguringDurations, show wizard. Otherwise, show the "Number of Sessions" dropdown or summary */}
