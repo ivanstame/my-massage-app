@@ -66,23 +66,22 @@ const BookingList = () => {
 
         const upcoming = userBookings
           .filter(booking => {
-            // Combine date from API with end time and convert to local timezone
-            const bookingEnd = moment.tz(
-              `${booking.date}T${booking.endTime}`, 
-              'YYYY-MM-DDTHH:mm', 
-              'America/Los_Angeles'
-            );
+            const bookingDate = moment.tz(booking.date, 'YYYY-MM-DD', 'America/Los_Angeles');
+            const bookingEnd = bookingDate
+              .clone()
+              .hour(booking.endTime.split(':')[0])
+              .minute(booking.endTime.split(':')[1]);
             return bookingEnd.isAfter(now);
           })
           .sort((a, b) => moment(a.date).diff(moment(b.date)));
 
         const past = userBookings
           .filter(booking => {
-            const bookingEnd = moment.tz(
-              `${booking.date}T${booking.endTime}`, 
-              'YYYY-MM-DDTHH:mm', 
-              'America/Los_Angeles'
-            );
+            const bookingDate = moment.tz(booking.date, 'YYYY-MM-DD', 'America/Los_Angeles');
+            const bookingEnd = bookingDate
+              .clone()
+              .hour(booking.endTime.split(':')[0])
+              .minute(booking.endTime.split(':')[1]);
             return bookingEnd.isSameOrBefore(now);
           })
           .sort((a, b) => moment.utc(b.date).diff(moment.utc(a.date)));
@@ -179,11 +178,17 @@ const BookingList = () => {
           </div>
           <div className="flex items-center space-x-2">
             <span className={`px-3 py-1 rounded-full text-sm font-medium
-              ${moment.tz(booking.date, 'America/Los_Angeles').isAfter(moment()) 
+              ${moment.tz(booking.date, 'America/Los_Angeles')
+                .hour(booking.endTime.split(':')[0])
+                .minute(booking.endTime.split(':')[1])
+                .isAfter(moment()) 
                 ? 'bg-green-100 text-green-800' 
                 : 'bg-slate-100 text-slate-800'}`}
             >
-              {moment.tz(booking.date, 'America/Los_Angeles').isAfter(moment()) ? 'Upcoming' : 'Past'}
+              {moment.tz(booking.date, 'America/Los_Angeles')
+                .hour(booking.endTime.split(':')[0])
+                .minute(booking.endTime.split(':')[1])
+                .isAfter(moment()) ? 'Upcoming' : 'Past'}
             </span>
           </div>
         </div>
