@@ -368,88 +368,82 @@ const BookingForm = ({ googleMapsLoaded }) => {
           )}
         </div>
 
-        {/* Sticky Progress Indicator */}
+        {/* Sticky Progress Indicator - Modified for correct steps */}
         <div className="sticky top-0 z-10 bg-white py-4 mb-8 border-b border-slate-200">
           <div className="max-w-3xl mx-auto px-4">
             <div className="flex items-center justify-between">
-              {/* Location Step - Updated to check session config */}
+              {/* Sessions Step */}
               <div className={`flex items-center ${
-                fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length) 
+                numSessions > 0 && (numSessions === 1 || sessionDurations.length === numSessions) 
                   ? 'text-green-600' 
                   : 'text-blue-600'
               }`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length) 
+                  numSessions > 0 && (numSessions === 1 || sessionDurations.length === numSessions)
                     ? 'bg-green-100' 
                     : 'bg-blue-100'
                 }`}>
-                  {(fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length)) 
+                  {(numSessions > 0 && (numSessions === 1 || sessionDurations.length === numSessions)) 
                     ? <Check className="w-4 h-4" /> 
-                    : <MapPin className="w-4 h-4" />}
+                    : <Users className="w-4 h-4" />}
                 </div>
-                <span className="ml-2 text-sm font-medium">Setup</span>
+                <span className="ml-2 text-sm font-medium">Sessions</span>
               </div>
 
               {/* Progress Line */}
               <div className={`flex-1 h-1 ${
-                (fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length)) 
+                numSessions > 0 && (numSessions === 1 || sessionDurations.length === numSessions)
                   ? 'bg-green-100' 
                   : 'bg-slate-200'
               }`}></div>
 
-              {/* Date Step */}
+              {/* Location Step */}
               <div className={`flex items-center ${
-                selectedDate 
+                fullAddress 
                   ? 'text-green-600' 
-                  : (fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length) 
-                      ? 'text-blue-600' 
-                      : 'text-slate-400')
+                  : (numSessions > 0 ? 'text-blue-600' : 'text-slate-400')
               }`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  selectedDate 
+                  fullAddress 
                     ? 'bg-green-100' 
-                    : (fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length) 
-                        ? 'bg-blue-100' 
-                        : 'bg-slate-100')
+                    : (numSessions > 0 ? 'bg-blue-100' : 'bg-slate-100')
                 }`}>
-                  {selectedDate ? <Check className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
+                  {fullAddress ? <Check className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
                 </div>
-                <span className="ml-2 text-sm font-medium">Date</span>
+                <span className="ml-2 text-sm font-medium">Location</span>
               </div>
 
               {/* Progress Line */}
-              <div className={`flex-1 h-1 ${selectedDate ? 'bg-green-100' : 'bg-slate-200'}`}></div>
+              <div className={`flex-1 h-1 ${fullAddress ? 'bg-green-100' : 'bg-slate-200'}`}></div>
 
-              {/* Time Step */}
+              {/* Duration Step */}
               <div className={`flex items-center ${
-                selectedTime 
+                (numSessions === 1 ? selectedDuration : sessionDurations.length) 
                   ? 'text-green-600' 
-                  : (selectedDate 
-                      ? 'text-blue-600' 
-                      : 'text-slate-400')
+                  : (fullAddress ? 'text-blue-600' : 'text-slate-400')
               }`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  selectedTime 
+                  (numSessions === 1 ? selectedDuration : sessionDurations.length)
                     ? 'bg-green-100' 
-                    : (selectedDate 
-                        ? 'bg-blue-100' 
-                        : 'bg-slate-100')
+                    : (fullAddress ? 'bg-blue-100' : 'bg-slate-100')
                 }`}>
-                  {selectedTime ? <Check className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                  {(numSessions === 1 ? selectedDuration : sessionDurations.length) 
+                    ? <Check className="w-4 h-4" /> 
+                    : <HourglassIcon className="w-4 h-4" />}
                 </div>
-                <span className="ml-2 text-sm font-medium">Time</span>
+                <span className="ml-2 text-sm font-medium">Duration</span>
               </div>
             </div>
 
             {/* Instructional Text */}
             {!selectedTime && (
               <div className="mt-4 text-center text-sm text-slate-600">
-                {!(fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length)) && 
-                  "Complete session setup and location first"}
-                {(fullAddress && (numSessions === 1 ? selectedDuration : sessionDurations.length)) && !selectedDate && 
-                  "Next, select a date from the calendar"}
-                {selectedDate && !selectedTime && 
-                  "Finally, choose an available time slot"}
+                {!(numSessions > 0) && "Start by selecting number of sessions"}
+                {numSessions > 0 && !fullAddress && "Next, confirm your location"}
+                {fullAddress && !(numSessions === 1 ? selectedDuration : sessionDurations.length) && 
+                  "Finally, select session duration(s)"}
+                {(numSessions === 1 ? selectedDuration : sessionDurations.length) && !selectedDate && 
+                  "Now choose a date from the calendar"}
               </div>
             )}
           </div>
