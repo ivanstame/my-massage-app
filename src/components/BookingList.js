@@ -56,7 +56,8 @@ const BookingList = () => {
       const response = await axios.get('/api/bookings', { withCredentials: true });
   
       if (Array.isArray(response.data)) {
-        const now = moment().utc();
+        // Use local timezone (America/Los_Angeles) for all comparisons
+        const now = moment().tz('America/Los_Angeles');
         
         // Filter bookings based on user type
         const userBookings = user.accountType === 'CLIENT'
@@ -65,18 +66,23 @@ const BookingList = () => {
 
         const upcoming = userBookings
           .filter(booking => {
-            const bookingEnd = moment.utc(booking.date)
-              .set('hour', parseInt(booking.endTime.split(':')[0]))
-              .set('minute', parseInt(booking.endTime.split(':')[1]));
+            // Combine date from API with end time and convert to local timezone
+            const bookingEnd = moment.tz(
+              `${booking.date}T${booking.endTime}`, 
+              'YYYY-MM-DDTHH:mm', 
+              'America/Los_Angeles'
+            );
             return bookingEnd.isAfter(now);
           })
-          .sort((a, b) => moment.utc(a.date).diff(moment.utc(b.date)));
+          .sort((a, b) => moment(a.date).diff(moment(b.date)));
 
         const past = userBookings
           .filter(booking => {
-            const bookingEnd = moment.utc(booking.date)
-              .set('hour', parseInt(booking.endTime.split(':')[0]))
-              .set('minute', parseInt(booking.endTime.split(':')[1]));
+            const bookingEnd = moment.tz(
+              `${booking.date}T${booking.endTime}`, 
+              'YYYY-MM-DDTHH:mm', 
+              'America/Los_Angeles'
+            );
             return bookingEnd.isSameOrBefore(now);
           })
           .sort((a, b) => moment.utc(b.date).diff(moment.utc(a.date)));
@@ -113,11 +119,12 @@ const BookingList = () => {
   };
 
   const formatDate = (dateString) => {
-    return moment.utc(dateString).format('dddd, MMMM D, YYYY');
+    return moment.tz(dateString, 'America/Los_Angeles').format('dddd, MMMM D, YYYY');
   };
 
   const formatTime = (timeString) => {
-    return moment.utc(`1970-01-01T${timeString}`).format('h:mm A');
+    // Parse time in local timezone, using arbitrary date that matches DST
+    return moment.tz(`2025-01-01T${timeString}`, 'America/Los_Angeles').format('h:mm A');
   };
 
   const handleAddToCalendar = (booking) => {
@@ -172,11 +179,11 @@ const BookingList = () => {
           </div>
           <div className="flex items-center space-x-2">
             <span className={`px-3 py-1 rounded-full text-sm font-medium
-              ${moment(booking.date).isAfter(moment()) 
+              ${moment.tz(booking.date, 'America/Los_Angeles').isAfter(moment()) 
                 ? 'bg-green-100 text-green-800' 
                 : 'bg-slate-100 text-slate-800'}`}
             >
-              {moment(booking.date).isAfter(moment()) ? 'Upcoming' : 'Past'}
+              {moment.tz(booking.date, 'America/Los_Angeles').isAfter(moment()) ? 'Upcoming' : 'Past'}
             </span>
           </div>
         </div>
