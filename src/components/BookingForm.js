@@ -347,38 +347,6 @@ const BookingForm = ({ googleMapsLoaded }) => {
           </div>
         )}
 
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className={`flex items-center ${fullAddress ? 'text-green-600' : 'text-blue-600'}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${fullAddress ? 'bg-green-100' : 'bg-blue-100'}`}>
-                {fullAddress ? <Check className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
-              </div>
-              <span className="ml-2 text-sm font-medium">Location</span>
-            </div>
-            <div className={`flex-1 h-1 ${fullAddress ? 'bg-green-100' : 'bg-slate-200'}`}></div>
-            <div className={`flex items-center ${selectedDate ? 'text-green-600' : (fullAddress ? 'text-blue-600' : 'text-slate-400')}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedDate ? 'bg-green-100' : (fullAddress ? 'bg-blue-100' : 'bg-slate-100')}`}>
-                {selectedDate ? <Check className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
-              </div>
-              <span className="ml-2 text-sm font-medium">Date</span>
-            </div>
-            <div className={`flex-1 h-1 ${selectedDate ? 'bg-green-100' : 'bg-slate-200'}`}></div>
-            <div className={`flex items-center ${selectedTime ? 'text-green-600' : (selectedDate ? 'text-blue-600' : 'text-slate-400')}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedTime ? 'bg-green-100' : (selectedDate ? 'bg-blue-100' : 'bg-slate-100')}`}>
-                {selectedTime ? <Check className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-              </div>
-              <span className="ml-2 text-sm font-medium">Time</span>
-            </div>
-          </div>
-
-          {!selectedTime && (
-            <div className="mt-4 text-center text-sm text-slate-600">
-              {!fullAddress && "Start by confirming your service location"}
-              {fullAddress && !selectedDate && "Next, select a date from the calendar"}
-              {selectedDate && !selectedTime && "Finally, choose an available time slot"}
-            </div>
-          )}
-        </div>
 
         <ServiceAreaWarning />
         {/* Calendar */}
