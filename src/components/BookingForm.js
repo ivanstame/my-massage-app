@@ -7,7 +7,7 @@ import AddressForm from './AddressForm';
 import SessionConfigWizard from './SessionConfigWizard';
 import { bookingService } from '../services/bookingService';
 import api from '../services/api';
-import { Users, HourglassIcon, Clock, MapPin, AlertCircle, Check, Calendar, Info } from 'lucide-react';
+import { CheckCircle, Users, HourglassIcon, Clock, MapPin, AlertCircle, Check, Calendar, Info } from 'lucide-react';
 
 const convertTo12Hour = (time24) => {
   const [hours, minutes] = time24.split(':').map(Number);
@@ -334,7 +334,10 @@ const BookingForm = ({ googleMapsLoaded }) => {
     <div className="pt-16">
       <div className="max-w-3xl mx-auto p-4 space-y-6">
         {provider && (
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200">
+          <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200 relative">
+            <CheckCircle className={`absolute top-2 right-2 w-6 h-6 ${
+              selectedTime ? 'text-green-500' : 'text-slate-300'
+            }`} />
             <h2 className="text-lg font-medium text-slate-900">
               Booking with {provider.providerProfile.businessName}
             </h2>
@@ -352,7 +355,10 @@ const BookingForm = ({ googleMapsLoaded }) => {
         {/* Calendar */}
         <div className={`bg-white rounded-lg shadow-sm relative ${
           !fullAddress ? 'opacity-50 pointer-events-none' : ''
-        }`}>
+        } relative`}>
+          <CheckCircle className={`absolute top-2 right-2 w-6 h-6 ${
+            selectedDate ? 'text-green-500' : 'text-slate-300'
+          }`} />
           <ResponsiveCalendar
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
@@ -368,92 +374,17 @@ const BookingForm = ({ googleMapsLoaded }) => {
           )}
         </div>
 
-        {/* Sticky Progress Indicator - Modified for correct steps */}
-        <div className="sticky top-0 z-10 bg-white py-4 mb-8 border-b border-slate-200">
-          <div className="max-w-3xl mx-auto px-4">
-            <div className="flex items-center justify-between">
-              {/* Sessions Step */}
-              <div className={`flex items-center ${
-                numSessions > 0 && (numSessions === 1 || sessionDurations.length === numSessions) 
-                  ? 'text-green-600' 
-                  : 'text-blue-600'
-              }`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  numSessions > 0 && (numSessions === 1 || sessionDurations.length === numSessions)
-                    ? 'bg-green-100' 
-                    : 'bg-blue-100'
-                }`}>
-                  {(numSessions > 0 && (numSessions === 1 || sessionDurations.length === numSessions)) 
-                    ? <Check className="w-4 h-4" /> 
-                    : <Users className="w-4 h-4" />}
-                </div>
-                <span className="ml-2 text-sm font-medium">Sessions</span>
-              </div>
-
-              {/* Progress Line */}
-              <div className={`flex-1 h-1 ${
-                numSessions > 0 && (numSessions === 1 || sessionDurations.length === numSessions)
-                  ? 'bg-green-100' 
-                  : 'bg-slate-200'
-              }`}></div>
-
-              {/* Location Step */}
-              <div className={`flex items-center ${
-                fullAddress 
-                  ? 'text-green-600' 
-                  : (numSessions > 0 ? 'text-blue-600' : 'text-slate-400')
-              }`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  fullAddress 
-                    ? 'bg-green-100' 
-                    : (numSessions > 0 ? 'bg-blue-100' : 'bg-slate-100')
-                }`}>
-                  {fullAddress ? <Check className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
-                </div>
-                <span className="ml-2 text-sm font-medium">Location</span>
-              </div>
-
-              {/* Progress Line */}
-              <div className={`flex-1 h-1 ${fullAddress ? 'bg-green-100' : 'bg-slate-200'}`}></div>
-
-              {/* Duration Step */}
-              <div className={`flex items-center ${
-                (numSessions === 1 ? selectedDuration : sessionDurations.length) 
-                  ? 'text-green-600' 
-                  : (fullAddress ? 'text-blue-600' : 'text-slate-400')
-              }`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  (numSessions === 1 ? selectedDuration : sessionDurations.length)
-                    ? 'bg-green-100' 
-                    : (fullAddress ? 'bg-blue-100' : 'bg-slate-100')
-                }`}>
-                  {(numSessions === 1 ? selectedDuration : sessionDurations.length) 
-                    ? <Check className="w-4 h-4" /> 
-                    : <HourglassIcon className="w-4 h-4" />}
-                </div>
-                <span className="ml-2 text-sm font-medium">Duration</span>
-              </div>
-            </div>
-
-            {/* Instructional Text */}
-            {!selectedTime && (
-              <div className="mt-4 text-center text-sm text-slate-600">
-                {!(numSessions > 0) && "Start by selecting number of sessions"}
-                {numSessions > 0 && !fullAddress && "Next, confirm your location"}
-                {fullAddress && !(numSessions === 1 ? selectedDuration : sessionDurations.length) && 
-                  "Finally, select session duration(s)"}
-                {(numSessions === 1 ? selectedDuration : sessionDurations.length) && !selectedDate && 
-                  "Now choose a date from the calendar"}
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* 3-column layout: 1) Session or Wizard, 2) Address, 3) Single Duration if needed */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* (1) If isConfiguringDurations, show wizard. Otherwise, show the "Number of Sessions" dropdown or summary */}
           {!isConfiguringDurations ? (
-            <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200">
+            <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200 relative">
+              <CheckCircle className={`absolute top-2 right-2 w-6 h-6 ${
+                numSessions > 0 && (numSessions === 1 || sessionDurations.length === numSessions) 
+                  ? 'text-green-500' 
+                  : 'text-slate-300'
+              }`} />
               <div className="flex items-center mb-3 border-b pb-2">
                 <Users className="w-5 h-5 text-blue-500 mr-2" />
                 <h2 className="font-medium">Number of Sessions</h2>
@@ -538,7 +469,10 @@ const BookingForm = ({ googleMapsLoaded }) => {
     </div>
   </div>
 )}
-<div className="bg-white p-4 border">
+<div className="bg-white p-4 border relative">
+  <CheckCircle className={`absolute top-2 right-2 w-6 h-6 ${
+    fullAddress ? 'text-green-500' : 'text-slate-300'
+  }`} />
   {/* The heading we want to show for ANY address option */}
   <div className="flex items-center mb-3 border-b pb-2">
     <MapPin className="w-5 h-5 text-blue-500 mr-2" />
@@ -587,7 +521,10 @@ const BookingForm = ({ googleMapsLoaded }) => {
 
           {/* (3) Single-session Duration if numSessions === 1 */}
           {numSessions === 1 && (
-            <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200">
+            <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200 relative">
+              <CheckCircle className={`absolute top-2 right-2 w-6 h-6 ${
+                selectedDuration ? 'text-green-500' : 'text-slate-300'
+              }`} />
               <div className="flex items-center gap-2 mb-3 border-b pb-2">
                 <HourglassIcon className="w-5 h-5 text-blue-500" />
                 <h2 className="font-medium">Session Duration</h2>
