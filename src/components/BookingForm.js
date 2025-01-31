@@ -471,7 +471,9 @@ const BookingForm = ({ googleMapsLoaded }) => {
 )}
 <div className="bg-white p-4 border relative">
   <CheckCircle className={`absolute top-2 right-2 w-6 h-6 ${
-    fullAddress ? 'text-green-500' : 'text-slate-300'
+    (useSavedAddr && fullAddress) || (!useSavedAddr && location) 
+      ? 'text-green-500' 
+      : 'text-slate-300'
   }`} />
   {/* The heading we want to show for ANY address option */}
   <div className="flex items-center mb-3 border-b pb-2">
