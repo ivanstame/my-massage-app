@@ -137,6 +137,9 @@ router.delete('/:id', ensureAdmin, async (req, res) => {
 router.get('/available/:date', async (req, res) => {
   try {
     const requestedDate = new Date(req.params.date);
+    if (isNaN(requestedDate)) {
+      return res.status(400).json({ message: 'Invalid date format' });
+    }
     const startOfDay = new Date(requestedDate.setHours(0, 0, 0, 0));
     const endOfDay = new Date(requestedDate.setHours(23, 59, 59, 999));
 

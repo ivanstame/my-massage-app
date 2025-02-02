@@ -17,6 +17,12 @@ router.post('/', ensureAuthenticated, async (req, res) => {
   try {
     const { date, time, duration, location } = req.body;
     
+    // Validate time format
+    const timeFormat24h = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeFormat24h.test(time)) {
+      return res.status(400).json({ message: 'Invalid time format. Use 24-hour format (HH:mm)' });
+    }
+
     // If client is booking, use their provider
     // If provider is booking for client, use provider's ID
     const providerId = req.user.accountType === 'CLIENT' 
@@ -38,7 +44,7 @@ router.post('/', ensureAuthenticated, async (req, res) => {
     // Store the date at noon UTC to avoid timezone issues
     const bookingDate = new Date(date);
     bookingDate.setUTCHours(12, 0, 0, 0);
-    const bookingStartTime = new Date(`${date}T${time}`);
+    const bookingStartTime = new Date(`${bookingDate.toISOString().split('T')[0]}T${time}:00Z`);
     const bookingEndTime = new Date(bookingStartTime.getTime() + duration * 60000);
     const endTime = bookingEndTime.toTimeString().slice(0, 5);
 
@@ -116,6 +122,13 @@ router.post('/bulk', ensureAuthenticated, async (req, res) => {
 
     // Validate all bookings are for the same date and location
     const firstRequest = bookingRequests[0];
+    
+    // Validate time format for first request
+    const timeFormat24h = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeFormat24h.test(firstRequest.time)) {
+      return res.status(400).json({ message: 'Invalid time format. Use 24-hour format (HH:mm)' });
+    }
+
     const allSameDate = bookingRequests.every(req => req.date === firstRequest.date);
     const allSameLocation = bookingRequests.every(req => 
       req.location.address === firstRequest.location.address &&

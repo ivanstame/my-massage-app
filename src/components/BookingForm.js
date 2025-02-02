@@ -10,7 +10,12 @@ import api from '../services/api';
 import { CheckCircle, Users, HourglassIcon, Clock, MapPin, AlertCircle, Check, Calendar, Info } from 'lucide-react';
 
 const convertTo12Hour = (time24) => {
+  // Ensure format is HH:mm
   const [hours, minutes] = time24.split(':').map(Number);
+  if (isNaN(hours) || isNaN(minutes)) {
+    console.error('Invalid time format:', time24);
+    return time24; // Return original if invalid
+  }
   const period = hours >= 12 ? 'PM' : 'AM';
   const hours12 = hours % 12 || 12;
   return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
@@ -594,13 +599,16 @@ const BookingForm = ({ googleMapsLoaded }) => {
                         <button
                           key={slot.original}
                           onClick={() => setSelectedTime(slot)}
-                          className={`p-2 text-center rounded border transition-all ${
+                          className={`p-2 text-center rounded border transition-all time-slot ${
                             selectedTime?.original === slot.original 
                               ? 'bg-blue-500 text-white border-blue-500' 
                               : 'hover:border-blue-500 hover:bg-blue-50'
                           }`}
                         >
-                          {slot.formatted}
+                          <span className="formatted-time">{slot.formatted}</span>
+                          <span className="raw-time text-xs text-gray-500 ml-2 hidden group-hover:inline">
+                            {slot.original}
+                          </span>
                         </button>
                       ))
                   )}
