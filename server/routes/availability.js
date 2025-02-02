@@ -8,21 +8,17 @@ const { getAvailableTimeSlots } = require('../utils/timeUtils');
 // Get availability blocks for a specific date
 router.get('/blocks/:date', ensureAuthenticated, async (req, res) => {
   try {
-    const date = new Date(req.params.date);
-    const nextDay = new Date(date);
-    nextDay.setDate(nextDay.getDate() + 1);
+    const laDate = DateTime.fromISO(req.params.date, { zone: 'America/Los_Angeles' });
+    
+    const blocks = await Availability.find({
+      provider: req.user._id, // Filter by logged-in provider
+      localDate: laDate.toFormat('yyyy-MM-dd')
+    });
 
-    const availabilityBlocks = await Availability.find({
-      date: {
-        $gte: date,
-        $lt: nextDay
-      }
-    }).sort({ start: 1 });
-
-    res.json(availabilityBlocks);
+    res.json(blocks);
   } catch (error) {
     console.error('Error fetching availability blocks:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Error fetching availability' });
   }
 });
 
@@ -47,24 +43,24 @@ router.get('/month/:year/:month', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Create new availability (admin only)
-router.post('/', ensureProvider, async (req, res) => {
+// Create new availability
+router.post('/', ensureAuthenticated, async (req, res) => {
   try {
-    console.log('Received availability request:', req.body);
-    const { date, start, end, type } = req.body;
-    const availability = new Availability({
-      date: new Date(date),
-      start,
-      end,
-      type,
-      provider: req.user._id
+    // Ensure provider is setting their own availability
+    if (req.user.accountType !== 'PROVIDER') {
+      return res.status(403).json({ message: 'Only providers can set availability' });
+    }
+
+    const newAvailability = new Availability({
+      ...req.body,
+      provider: req.user._id // Force provider ID from session
     });
 
-    const newAvailability = await availability.save();
+    await newAvailability.save();
     res.status(201).json(newAvailability);
   } catch (error) {
     console.error('Error creating availability:', error);
-    res.status(400).json({ message: error.message });
+    res.status(500).json({ message: 'Availability creation failed' });
   }
 });
 
@@ -104,32 +100,21 @@ router.put('/:id', ensureAdmin, async (req, res) => {
   }
 });
 
-// Delete availability (admin only)
-router.delete('/:id', ensureAdmin, async (req, res) => {
+// Delete availability block
+router.delete('/:id', ensureAuthenticated, async (req, res) => {
   try {
-    const block = await Availability.findById(req.params.id);
-    if (!block) {
-      return res.status(404).json({ message: 'Availability block not found' });
+    const availability = await Availability.findById(req.params.id);
+    
+    // Verify ownership
+    if (!availability.provider.equals(req.user._id)) {
+      return res.status(403).json({ message: 'Not authorized to modify this availability' });
     }
 
-    const { hasConflicts, bookings } = await checkBookingConflicts(
-      block.date,
-      block.start,
-      block.end
-    );
-
-    if (hasConflicts) {
-      return res.status(400).json({
-        message: 'Cannot delete: Block contains existing appointments',
-        conflicts: bookings
-      });
-    }
-
-    await block.remove();
-    res.json({ message: 'Availability block deleted successfully' });
+    await availability.remove();
+    res.json({ message: 'Availability removed successfully' });
   } catch (error) {
     console.error('Error deleting availability:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Server error deleting availability' });
   }
 });
 
