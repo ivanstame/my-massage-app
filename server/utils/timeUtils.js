@@ -321,8 +321,8 @@ async function getAvailableTimeSlots(
   });
   console.log('DEBUG: is Array?', Array.isArray(appointmentDuration));
 
-  const startTime = new Date(`${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.start}`);
-  const endTime = new Date(`${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.end}`);
+  const startTime = new Date(`${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.start}:00Z`);
+  const endTime = new Date(`${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.end}:00Z`);
 
   const slots = generateTimeSlots(startTime, endTime, 30, appointmentDuration);
   console.log('DEBUG: generated base slots:', slots.map(s => s.toTimeString().slice(0,5)));
