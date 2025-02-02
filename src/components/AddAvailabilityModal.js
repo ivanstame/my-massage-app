@@ -7,17 +7,13 @@ const AddAvailabilityModal = ({ date, onAdd, onClose, serviceArea }) => {
   const [type, setType] = useState('autobook');
   const [error, setError] = useState(null);
 
-  const formatTime = (hour, minute) => {
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${period}`;
-  };
-
   const generateTimeOptions = () => {
     const options = [];
-    for (let hour = 7; hour <= 23; hour++) {
+    for (let hour = 0; hour < 24; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        const time = formatTime(hour, minute);
+        const displayHour = hour % 12 || 12;
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const time = `${displayHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${period}`;
         options.push(<option key={time} value={time}>{time}</option>);
       }
     }
@@ -28,22 +24,32 @@ const AddAvailabilityModal = ({ date, onAdd, onClose, serviceArea }) => {
     e.preventDefault();
     setError(null);
 
-    // Convert back to 24-hour format for backend
-    const to24Hour = (time) => {
-      const [timePart, period] = time.split(' ');
-      let [hours, minutes] = timePart.split(':');
-      hours = parseInt(hours);
+    // Convert local time to UTC time string
+    const toUTC = (time12h) => {
+      const [timePart, period] = time12h.split(' ');
+      let [hours, minutes] = timePart.split(':').map(Number);
+      
+      // Convert to 24-hour format
       if (period === 'PM' && hours !== 12) hours += 12;
       if (period === 'AM' && hours === 12) hours = 0;
-      return `${hours.toString().padStart(2, '0')}:${minutes}`;
+
+      // Create date in local timezone
+      const localDate = new Date(date);
+      localDate.setHours(hours, minutes, 0, 0);
+
+      // Convert to UTC
+      const utcHours = localDate.getUTCHours().toString().padStart(2, '0');
+      const utcMinutes = localDate.getUTCMinutes().toString().padStart(2, '0');
+      
+      return `${utcHours}:${utcMinutes}`;
     };
 
     const availability = {
       date: date.toISOString().split('T')[0],
-      start: to24Hour(startTime),
-      end: to24Hour(endTime),
+      start: toUTC(startTime),
+      end: toUTC(endTime),
       type,
-      serviceArea // Include service area for validation
+      serviceArea
     };
 
     onAdd(availability);
