@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { DateTime } = require('luxon');
 
 const AvailabilitySchema = new mongoose.Schema({
   provider: {
@@ -7,10 +8,19 @@ const AvailabilitySchema = new mongoose.Schema({
     required: true
   },
   date: { type: Date, required: true },
+  localDate: { type: String, required: true },
   start: { type: String, required: true },
   end: { type: String, required: true },
   type: { type: String, enum: ['autobook', 'unavailable'], required: true },
   availableSlots: [{ type: String }] // New field to store available 30-minute slots
+});
+
+// Added pre-save hook
+AvailabilitySchema.pre('save', function(next) {
+  this.localDate = DateTime.fromJSDate(this.date)
+    .setZone('America/Los_Angeles')
+    .toFormat('yyyy-MM-dd');
+  next();
 });
 
 // Compound index for provider-date queries
