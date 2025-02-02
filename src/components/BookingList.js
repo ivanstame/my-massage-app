@@ -66,22 +66,20 @@ const BookingList = () => {
 
         const upcoming = userBookings
           .filter(booking => {
-            const bookingDate = moment.tz(booking.date, 'YYYY-MM-DD', 'America/Los_Angeles');
-            const bookingEnd = bookingDate
-              .clone()
-              .hour(booking.endTime.split(':')[0])
-              .minute(booking.endTime.split(':')[1]);
+            const bookingDate = moment.utc(booking.date).add(12, 'hours');
+            const bookingEnd = bookingDate.clone()
+              .hours(parseInt(booking.endTime.split(':')[0]))
+              .minutes(parseInt(booking.endTime.split(':')[1]));
             return bookingEnd.isAfter(now);
           })
           .sort((a, b) => moment(a.date).diff(moment(b.date)));
 
         const past = userBookings
           .filter(booking => {
-            const bookingDate = moment.tz(booking.date, 'YYYY-MM-DD', 'America/Los_Angeles');
-            const bookingEnd = bookingDate
-              .clone()
-              .hour(booking.endTime.split(':')[0])
-              .minute(booking.endTime.split(':')[1]);
+            const bookingDate = moment.utc(booking.date).add(12, 'hours');
+            const bookingEnd = bookingDate.clone()
+              .hours(parseInt(booking.endTime.split(':')[0]))
+              .minutes(parseInt(booking.endTime.split(':')[1]));
             return bookingEnd.isSameOrBefore(now);
           })
           .sort((a, b) => moment.utc(b.date).diff(moment.utc(a.date)));
@@ -118,7 +116,8 @@ const BookingList = () => {
   };
 
   const formatDate = (dateString) => {
-    return moment.tz(dateString, 'America/Los_Angeles').format('dddd, MMMM D, YYYY');
+    // Since the date is stored at midnight UTC, add 12 hours to ensure it stays on the same day in all timezones
+    return moment.utc(dateString).add(12, 'hours').format('dddd, MMMM D, YYYY');
   };
 
   const formatTime = (timeString) => {
@@ -178,16 +177,16 @@ const BookingList = () => {
           </div>
           <div className="flex items-center space-x-2">
             <span className={`px-3 py-1 rounded-full text-sm font-medium
-              ${moment.tz(booking.date, 'America/Los_Angeles')
-                .hour(booking.endTime.split(':')[0])
-                .minute(booking.endTime.split(':')[1])
+              ${moment.utc(booking.date).add(12, 'hours')
+                .hours(parseInt(booking.endTime.split(':')[0]))
+                .minutes(parseInt(booking.endTime.split(':')[1]))
                 .isAfter(moment()) 
                 ? 'bg-green-100 text-green-800' 
                 : 'bg-slate-100 text-slate-800'}`}
             >
-              {moment.tz(booking.date, 'America/Los_Angeles')
-                .hour(booking.endTime.split(':')[0])
-                .minute(booking.endTime.split(':')[1])
+              {moment.utc(booking.date).add(12, 'hours')
+                .hours(parseInt(booking.endTime.split(':')[0]))
+                .minutes(parseInt(booking.endTime.split(':')[1]))
                 .isAfter(moment()) ? 'Upcoming' : 'Past'}
             </span>
           </div>
