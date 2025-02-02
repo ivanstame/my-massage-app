@@ -24,7 +24,7 @@ const AddAvailabilityModal = ({ date, onAdd, onClose, serviceArea }) => {
     e.preventDefault();
     setError(null);
 
-    // Convert local time to UTC time string
+    // Proper time conversion using Luxon
     const toUTC = (time12h) => {
       const [timePart, period] = time12h.split(' ');
       let [hours, minutes] = timePart.split(':').map(Number);
@@ -33,23 +33,22 @@ const AddAvailabilityModal = ({ date, onAdd, onClose, serviceArea }) => {
       if (period === 'PM' && hours !== 12) hours += 12;
       if (period === 'AM' && hours === 12) hours = 0;
 
-      // Create date in local timezone
-      const localDate = new Date(date);
-      localDate.setHours(hours, minutes, 0, 0);
+      // Create DateTime in LA timezone
+      const laDateTime = DateTime.fromJSDate(date)
+        .setZone('America/Los_Angeles')
+        .set({ hour: hours, minute: minutes });
 
-      // Convert to UTC
-      const utcHours = localDate.getUTCHours().toString().padStart(2, '0');
-      const utcMinutes = localDate.getUTCMinutes().toString().padStart(2, '0');
-      
-      return `${utcHours}:${utcMinutes}`;
+      // Convert to UTC and format
+      return laDateTime.toUTC().toFormat('HH:mm');
     };
 
     const availability = {
-      date: date.toISOString().split('T')[0],
+      date: new Date(date), // Pass raw date
       start: toUTC(startTime),
       end: toUTC(endTime),
       type,
-      serviceArea
+      serviceArea,
+      provider: serviceArea.providerId // Add provider reference
     };
 
     onAdd(availability);

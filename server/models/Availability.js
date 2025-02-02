@@ -17,9 +17,14 @@ const AvailabilitySchema = new mongoose.Schema({
 
 // Added pre-save hook
 AvailabilitySchema.pre('save', function(next) {
-  this.localDate = DateTime.fromJSDate(this.date)
-    .setZone('America/Los_Angeles')
-    .toFormat('yyyy-MM-dd');
+  // Create DateTime from JS Date in LA timezone
+  const laDateTime = DateTime.fromJSDate(this.date, { zone: 'America/Los_Angeles' })
+    .startOf('day');
+  
+  // Set both date and localDate correctly
+  this.localDate = laDateTime.toFormat('yyyy-MM-dd');
+  this.date = laDateTime.toUTC().toJSDate();
+  
   next();
 });
 

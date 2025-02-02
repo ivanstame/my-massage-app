@@ -32,8 +32,13 @@ const ProviderAvailability = () => {
 
   const fetchAvailabilityBlocks = useCallback(async (date) => {
     try {
+      // Convert date to LA time string
+      const laDate = DateTime.fromJSDate(date)
+        .setZone('America/Los_Angeles')
+        .toFormat('yyyy-MM-dd');
+
       const response = await axios.get(
-        `/api/availability/blocks/${date.toISOString().split('T')[0]}`,
+        `/api/availability/blocks/${laDate}`,
         { withCredentials: true }
       );
       setAvailabilityBlocks(response.data);
@@ -370,11 +375,14 @@ const ProviderAvailability = () => {
         {/* Desktop View */}
         <div className="hidden lg:flex lg:flex-row gap-6">
           <div className="lg:w-1/3">
-            <ResponsiveCalendar 
+            <ResponsiveCalendar
               selectedDate={selectedDate}
-              onDateChange={(date) => {
+              onDateChange={(newDate) => {
                 if (requestState !== 'LOADING') {
-                  setSelectedDate(date);
+                  const laDate = DateTime.fromJSDate(newDate)
+                    .setZone('America/Los_Angeles')
+                    .toJSDate();
+                  setSelectedDate(laDate);
                 }
               }}
               events={availabilityBlocks}
