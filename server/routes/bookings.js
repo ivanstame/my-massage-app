@@ -5,6 +5,8 @@ const Availability = require('../models/Availability');
 const { ensureAuthenticated } = require('../middleware/passportMiddleware');
 const { getAvailableTimeSlots } = require('../utils/timeUtils');
 const { calculateTravelTime } = require('../services/mapService');
+const { DateTime } = require('luxon');
+
 
 // Calculate price helper
 const calculatePrice = (duration) => {
@@ -43,8 +45,14 @@ router.post('/', ensureAuthenticated, async (req, res) => {
 
     // Store the date at noon UTC to avoid timezone issues
     const bookingDate = new Date(date);
-    bookingDate.setUTCHours(12, 0, 0, 0);
-    const bookingStartTime = new Date(`${bookingDate.toISOString().split('T')[0]}T${time}:00Z`);
+    bookingDate.setUTCHours(0, 0, 0, 0);
+    // const bookingStartTime = DateTime.fromISO(`${bookingDate.toISOString().split('T')[0]}T${time}`, { zone: 'America/Los_Angeles' }).toUTC().toJSDate();
+    const { DateTime } = require('luxon');  // Make sure this is at the top of the file
+const bookingDateStr = bookingDate.toISOString().split('T')[0];
+const bookingStartTime = DateTime.fromISO(`${bookingDateStr}T${time}`, { zone: 'America/Los_Angeles' })
+  .toUTC()
+  .toJSDate();
+
     const bookingEndTime = new Date(bookingStartTime.getTime() + duration * 60000);
     const endTime = bookingEndTime.toTimeString().slice(0, 5);
 
