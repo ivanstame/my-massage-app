@@ -116,8 +116,7 @@ const BookingList = () => {
   };
 
   const formatDate = (dateString) => {
-    // Since the date is stored at midnight UTC, add 12 hours to ensure it stays on the same day in all timezones
-    return moment.utc(dateString).add(12, 'hours').format('dddd, MMMM D, YYYY');
+    return moment.utc(dateString).format('dddd, MMMM D, YYYY');
   };
 
   const formatTime = (timeString) => {

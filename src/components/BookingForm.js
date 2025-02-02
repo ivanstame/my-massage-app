@@ -50,6 +50,21 @@ const BookingForm = ({ googleMapsLoaded }) => {
   }, [user]);
 
   // Multi-session wizard
+  const handleSessionTypeChange = (num) => {
+    setNumSessions(num);
+    if (num === 1) {
+      setSessionDurations([]);
+      setSessionNames([]);
+      setIsConfiguringDurations(false);
+      setSelectedDuration(null);
+    } else {
+      setSessionDurations(Array(num).fill(null));
+      setSessionNames(Array(num).fill(''));
+      setIsConfiguringDurations(true);
+      setWizardStep(0);
+    }
+  };
+
   const [numSessions, setNumSessions] = useState(1);
   const [sessionDurations, setSessionDurations] = useState([]);
   const [sessionNames, setSessionNames] = useState([]);
@@ -136,6 +151,12 @@ const BookingForm = ({ googleMapsLoaded }) => {
   
   // Fetch available slots from the server
   const fetchAvailableSlots = async () => {
+    if (!googleMapsLoaded) {
+      setError('Google Maps integration required - please refresh the page');
+      setAvailableSlots([]);
+      return;
+    }
+
     if (!fullAddress || (!selectedDuration && !sessionDurations.length)) {
       setAvailableSlots([]);
       return;
@@ -415,19 +436,7 @@ const BookingForm = ({ googleMapsLoaded }) => {
                 // Single session dropdown
                 <select
                   value={numSessions}
-                  onChange={(e) => {
-                    const count = Number(e.target.value);
-                    setNumSessions(count);
-                    if (count > 1) {
-                      setSessionDurations(Array(count).fill(null));
-                      setSessionNames(Array(count).fill(''));
-                      setIsConfiguringDurations(true);
-                      setWizardStep(0);
-                    } else {
-                      setSessionDurations([null]);
-                      setSessionNames(['']);
-                    }
-                  }}
+                  onChange={(e) => handleSessionTypeChange(Number(e.target.value))}
                   className="w-full p-2 border border-slate-200 rounded-md hover:border-slate-300 transition-colors"
                 >
                   {[1, 2, 3, 4].map(num => (
