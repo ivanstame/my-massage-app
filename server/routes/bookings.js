@@ -43,22 +43,19 @@ router.post('/', ensureAuthenticated, async (req, res) => {
       }
     }
 
-    // Store the date at noon UTC to avoid timezone issues
-    const bookingDate = new Date(date);
-    bookingDate.setUTCHours(0, 0, 0, 0);
-    // const bookingStartTime = DateTime.fromISO(`${bookingDate.toISOString().split('T')[0]}T${time}`, { zone: 'America/Los_Angeles' }).toUTC().toJSDate();
-    const { DateTime } = require('luxon');  // Make sure this is at the top of the file
-const bookingDateStr = bookingDate.toISOString().split('T')[0];
-const bookingStartTime = DateTime.fromISO(`${bookingDateStr}T${time}`, { zone: 'America/Los_Angeles' })
-  .toUTC()
-  .toJSDate();
+    const bookingDateLA = DateTime.fromISO(date, { zone: 'America/Los_Angeles' }).startOf('day');
+    const bookingDate = bookingDateLA.toUTC().toJSDate();
+
+    const bookingStartTime = DateTime.fromISO(`${bookingDateLA.toFormat('yyyy-MM-dd')}T${time}`, { 
+      zone: 'America/Los_Angeles' 
+    }).toUTC().toJSDate();
 
     const bookingEndTime = new Date(bookingStartTime.getTime() + duration * 60000);
     const endTime = bookingEndTime.toTimeString().slice(0, 5);
 
     // Get availability for the day
     const availability = await Availability.findOne({
-      date: bookingDate,
+      localDate: bookingDateLA.toFormat('yyyy-MM-dd'),
       type: 'autobook'
     });
 

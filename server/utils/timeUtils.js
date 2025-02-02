@@ -177,6 +177,13 @@ async function validateSlots(
   for (const slot of slots) {
     let isValid = true;
     const slotStart = DateTime.fromJSDate(slot);
+    
+    console.log('Validating slot:', {
+      localTime: DateTime.fromJSDate(slot).setZone('America/Los_Angeles').toString(),
+      utcTime: slot.toISOString(),
+      bookingStart: DateTime.fromJSDate(slot).setZone('America/Los_Angeles').toString(),
+      utcBookingStart: slot.toISOString()
+    });
 
     // Branch for multi-session arrays
     if (Array.isArray(appointmentDuration)) {
@@ -323,13 +330,18 @@ async function getAvailableTimeSlots(
   });
   console.log('DEBUG: is Array?', Array.isArray(appointmentDuration));
 
-  const datePart = adminAvailability.date.toISOString().split('T')[0];
+  const availabilityDateLA = DateTime.fromJSDate(adminAvailability.date)
+    .setZone('America/Los_Angeles')
+    .startOf('day');
+    
+  const datePart = availabilityDateLA.toFormat('yyyy-MM-dd');
+
   const startTime = DateTime.fromISO(`${datePart}T${adminAvailability.start}`, { 
-    zone: laZone 
+    zone: 'America/Los_Angeles' 
   }).toUTC().toJSDate();
 
   const endTime = DateTime.fromISO(`${datePart}T${adminAvailability.end}`, { 
-    zone: laZone 
+    zone: 'America/Los_Angeles' 
   }).toUTC().toJSDate();
 
   const slots = generateTimeSlots(startTime, endTime, 30, appointmentDuration);
