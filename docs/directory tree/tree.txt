@@ -1,0 +1,129 @@
+my-massage-app/
+├── client/ [React]
+│   ├── public/ [Static assets]
+│   │   ├── index.html
+│   │   ├── manifest.json
+│   │   └── imgs/
+│   │       └── logo.png
+│   └── src/
+│       ├── App.js [HIGH TOUCH]
+│       ├── AuthContext.js [HIGH TOUCH]
+│       ├── StateDebugger.js
+│       ├── index.js
+│       ├── index.css
+│       ├── output.css
+│       ├── components/ [HIGH TOUCH]
+│       │   ├── AddAvailabilityModal.js [🧪]
+│       │   ├── AddressForm.js [🧪]
+│       │   ├── AdminAppointments.js
+│       │   ├── AdminAvailability.css
+│       │   ├── AppointmentDetails.js
+│       │   ├── AREAINTAKECARDS.JS
+│       │   ├── BookingForm.js [CROSS-REF: booking_flow.md]
+│       │   ├── BookingList.js
+│       │   ├── BottomSheet.js
+│       │   ├── DaySchedule.js
+│       │   ├── Home.js
+│       │   ├── InvitationHandling.js
+│       │   ├── Login.js [🧪]
+│       │   ├── MobileMenu.js
+│       │   ├── ModifyAvailabilityModal.js
+│       │   ├── MonthCalendar.js
+│       │   ├── MyProfile.js
+│       │   ├── Navigation/
+│       │   │   └── Header.js
+│       │   ├── PrivateRoute.js
+│       │   ├── ProfileSection.js
+│       │   ├── ProfileSetup.js [CROSS-REF: provider_signup_flow.md]
+│       │   ├── ProviderAnalytics.js
+│       │   ├── ProviderAppointments.js
+│       │   ├── ProviderAvailability.js
+│       │   ├── ProviderClientDetails.js
+│       │   ├── ProviderClients.js
+│       │   ├── ProviderConfirmationModal.js
+│       │   ├── ProviderDashboard.js
+│       │   ├── ProviderProfile.js
+│       │   ├── ProviderSettings.js [CROSS-REF: provider_signup_flow.md]
+│       │   ├── RegistrationGuard.js
+│       │   ├── ResponsiveCalendar.js
+│       │   ├── SessionConfigWizard.js
+│       │   ├── SignUp.js [CROSS-REF: provider_signup_flow.md]
+│       │   ├── TestInvitationManager.js
+│       │   ├── TreatmentCard.js
+│       │   ├── TreatmentPreferences.js
+│       │   ├── transitions/
+│       │   │   ├── ProfileTransitions.css
+│       │   │   └── TransitionComponents.js
+│       │   └── ui/
+│       │       └── popover.jsx
+│       ├── lib/
+│       │   └── utils.js
+│       ├── services/ [HIGH TOUCH]
+│       │   ├── api.js
+│       │   └── bookingService.js
+│       └── utils/ [🧪]
+│           ├── LuxonService.js [HIGH TOUCH]
+│           ├── timeConstants.js
+│           └── timeUtils.js
+│
+├── server/ [Node.js + Express]
+│   ├── server.js [HIGH TOUCH]
+│   ├── config/ [HIGH TOUCH]
+│   │   └── passport.js
+│   ├── middleware/ [HIGH TOUCH]
+│   │   ├── passportMiddleware.js
+│   │   └── validation.js
+│   ├── migrations/
+│   │   └── update-user-schema.js
+│   ├── models/ [Mongoose]
+│   │   ├── User.js [HIGH TOUCH]
+│   │   ├── Booking.js [HIGH TOUCH]
+│   │   ├── Availability.js [HIGH TOUCH]
+│   │   └── Invitation.js
+│   ├── routes/ [HIGH TOUCH]
+│   │   ├── auth.js
+│   │   ├── availability.js [HIGH TOUCH]
+│   │   ├── bookings.js
+│   │   ├── geocode.js
+│   │   ├── invitations.js
+│   │   ├── therapist.js
+│   │   └── users.js
+│   ├── services/
+│   │   └── mapService.js
+│   └── utils/ [HIGH TOUCH]
+│       ├── logger.js
+│       ├── servertimeutils.js
+│       └── timeUtils.js
+│
+├── test/ [Jest + Cypress]
+│   └── utils/ [🧪]
+│       ├── timeTestHelpers.js
+│       └── LuxonService.test.js
+│
+├── docs/ [Documentation]
+│   ├── api/
+│   │   └── bookings.openapi.yaml
+│   ├── flows/
+│   │   ├── booking_flow.md
+│   │   ├── provider_signup_flow.md
+│   │   ├── client_signup_flow.md
+│   │   └── provider_availability_flow.md
+│   ├── directory tree/
+│   │   └── tree.txt
+│   └── development/
+│       └── testing_and_setup.md
+│
+├── logs/
+│   ├── combined.log
+│   └── error.log
+│
+└── config/
+    ├── babel.config.js
+    ├── jest.config.js
+    ├── postcss.config.js
+    └── tailwind.config.js
+
+Key:
+🧪 - Contains tests
+[HIGH TOUCH] - Frequently modified files
+[CROSS-REF] - Links to related documentation

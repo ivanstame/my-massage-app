@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Clock, MapPin, AlertCircle } from 'lucide-react';
 import { DateTime } from 'luxon';
-import { DEFAULT_TZ, TIME_FORMATS } from '../../utils/timeConstants';
+import { DEFAULT_TZ, TIME_FORMATS } from '../../shared/utils/timeConstants';
 
 const AddAvailabilityModal = ({ date, onAdd, onClose, serviceArea }) => {
   const [startTime, setStartTime] = useState('09:00');

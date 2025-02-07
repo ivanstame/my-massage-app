@@ -1,0 +1,111 @@
+.
+├── clear
+├── clear.pub
+├── copy_to_projectdump.sh
+├── deepseek-api.mjs
+├── hashPassword.js
+├── logs
+│   ├── combined.log
+│   └── error.log
+├── mymassageappnewest.tar.gz
+├── package.json
+├── package-lock.json
+├── postcss.config.js
+├── project_structure_updated.txt
+├── public
+│   ├── imgs
+│   │   └── logo.png
+│   ├── index.html
+│   └── manifest.json
+├── README.md
+├── server
+│   ├── config
+│   │   └── passport.js
+│   ├── cookies.txt
+│   ├── middleware
+│   │   ├── authMiddleware.js.old
+│   │   └── passportMiddleware.js
+│   ├── migrations
+│   │   └── update-user-schema.js
+│   ├── models
+│   │   ├── Availability.js
+│   │   ├── Booking.js
+│   │   ├── Invitation.js
+│   │   └── User.js
+│   ├── routes
+│   │   ├── auth.js
+│   │   ├── availability.js
+│   │   ├── bookings.js
+│   │   ├── geocode.js
+│   │   ├── invitations.js
+│   │   ├── therapist.js
+│   │   └── users.js
+│   ├── server.js
+│   ├── services
+│   │   └── mapService.js
+│   └── utils
+│       ├── logger.js
+│       ├── servertimeutils.js
+│       └── timeUtils.js
+├── src
+│   ├── App.js
+│   ├── AuthContext.js
+│   ├── components
+│   │   ├── AddAvailabilityModal.js
+│   │   ├── AddressForm.js
+│   │   ├── AdminAppointments.js
+│   │   ├── AdminAvailability.css
+│   │   ├── AppointmentDetails.js
+│   │   ├── AREAINTAKECARDS.JS
+│   │   ├── BookingForm.js
+│   │   ├── BookingList.js
+│   │   ├── BottomSheet.js
+│   │   ├── DaySchedule.js
+│   │   ├── Home.js
+│   │   ├── InvitationHandling.js
+│   │   ├── Login.js
+│   │   ├── MobileMenu.js
+│   │   ├── ModifyAvailabilityModal.js
+│   │   ├── MonthCalendar.js
+│   │   ├── MyProfile.js
+│   │   ├── Navigation
+│   │   │   └── Header.js
+│   │   ├── PrivateRoute.js
+│   │   ├── ProfileSection.js
+│   │   ├── ProfileSetup.js
+│   │   ├── ProviderAnalytics.js
+│   │   ├── ProviderAppointments.js
+│   │   ├── ProviderAvailability.js
+│   │   ├── ProviderClientDetails.js
+│   │   ├── ProviderClients.js
+│   │   ├── ProviderConfirmationModal.js
+│   │   ├── ProviderDashboard.js
+│   │   ├── ProviderProfile.js
+│   │   ├── ProviderSettings.js
+│   │   ├── RegistrationGuard.js
+│   │   ├── ResponsiveCalendar.js
+│   │   ├── SessionConfigWizard.js
+│   │   ├── SignUp.js
+│   │   ├── TestInvitationManager.js
+│   │   ├── transitions
+│   │   │   ├── ProfileTransitions.css
+│   │   │   └── TransitionComponents.js
+│   │   ├── TreatmentCard.js
+│   │   ├── TreatmentPreferences.js
+│   │   └── ui
+│   │       └── popover.jsx
+│   ├── index.css
+│   ├── index.js
+│   ├── lib
+│   │   └── utils.js
+│   ├── output.css
+│   ├── services
+│   │   ├── api.js
+│   │   └── bookingService.js
+│   ├── StateDebugger.js
+│   └── utils
+│       └── timeUtils.js
+├── tailwind.config.js
+└── test-api.js
+
+19 directories, 89 files

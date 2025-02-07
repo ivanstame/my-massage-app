@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useContext } from 'react';
 import axios from 'axios';
-import moment from 'moment-timezone';
 import { AuthContext } from '../AuthContext';
 import { Calendar, MapPin, Clock, AlertCircle, Phone, MessageSquare } from 'lucide-react';
+import { DateTime } from 'luxon';
+import { DEFAULT_TZ, TIME_FORMATS } from '../../shared/utils/timeConstants';
+import LuxonService from '../../shared/utils/LuxonService';
+
 
 const BookingList = () => {
   const [upcomingBookings, setUpcomingBookings] = useState([]);
@@ -30,11 +33,11 @@ const BookingList = () => {
     fetchProviderInfo();
     fetchBookings();
   }, [user]);
-  
+
   const isOutsideServiceArea = (location) => {
     if (!serviceArea?.center || !location) return false;
     
-    const R = 6371;
+    const R = 6371; // Earth's radius in km
     const lat1 = serviceArea.center.lat * Math.PI / 180;
     const lat2 = location.lat * Math.PI / 180;
     const dLat = (location.lat - serviceArea.center.lat) * Math.PI / 180;
@@ -56,33 +59,36 @@ const BookingList = () => {
       const response = await axios.get('/api/bookings', { withCredentials: true });
   
       if (Array.isArray(response.data)) {
-        // Use local timezone (America/Los_Angeles) for all comparisons
-        const now = moment().tz('America/Los_Angeles');
+        // Use LA timezone for all comparisons
+        const now = DateTime.now().setZone(DEFAULT_TZ);
         
-        // Filter bookings based on user type
-        const userBookings = user.accountType === 'CLIENT'
-          ? response.data.filter(booking => booking.client === user._id)
-          : response.data.filter(booking => booking.provider === user._id);
-
-        const upcoming = userBookings
+        const upcoming = response.data
           .filter(booking => {
-            const bookingDate = moment.utc(booking.date).add(12, 'hours');
-            const bookingEnd = bookingDate.clone()
-              .hours(parseInt(booking.endTime.split(':')[0]))
-              .minutes(parseInt(booking.endTime.split(':')[1]));
-            return bookingEnd.isAfter(now);
+            const bookingEnd = DateTime.fromISO(booking.date)
+              .setZone(DEFAULT_TZ)
+              .set({
+                hour: parseInt(booking.endTime.split(':')[0]),
+                minute: parseInt(booking.endTime.split(':')[1])
+              });
+            return bookingEnd > now;
           })
-          .sort((a, b) => moment(a.date).diff(moment(b.date)));
+          .sort((a, b) => 
+            DateTime.fromISO(a.date).diff(DateTime.fromISO(b.date)).milliseconds
+          );
 
-        const past = userBookings
+        const past = response.data
           .filter(booking => {
-            const bookingDate = moment.utc(booking.date).add(12, 'hours');
-            const bookingEnd = bookingDate.clone()
-              .hours(parseInt(booking.endTime.split(':')[0]))
-              .minutes(parseInt(booking.endTime.split(':')[1]));
-            return bookingEnd.isSameOrBefore(now);
+            const bookingEnd = DateTime.fromISO(booking.date)
+              .setZone(DEFAULT_TZ)
+              .set({
+                hour: parseInt(booking.endTime.split(':')[0]),
+                minute: parseInt(booking.endTime.split(':')[1])
+              });
+            return bookingEnd <= now;
           })
-          .sort((a, b) => moment.utc(b.date).diff(moment.utc(a.date)));
+          .sort((a, b) => 
+            DateTime.fromISO(b.date).diff(DateTime.fromISO(a.date)).milliseconds
+          );
   
         setUpcomingBookings(upcoming);
         setPastBookings(past);
@@ -91,7 +97,6 @@ const BookingList = () => {
       }
     } catch (error) {
       setError('Error fetching bookings');
-      console.error('Time itself is broken:', error);
     } finally {
       setIsLoading(false);
     }
@@ -116,22 +121,49 @@ const BookingList = () => {
   };
 
   const formatDate = (dateString) => {
-    return moment.utc(dateString).format('dddd, MMMM D, YYYY');
+    return DateTime
+      .fromISO(dateString)
+      .setZone(DEFAULT_TZ)
+      .toFormat('cccc, LLLL d, yyyy');
   };
 
   const formatTime = (timeString) => {
-    // Parse time in local timezone, using arbitrary date that matches DST
-    return moment.tz(`2025-01-01T${timeString}`, 'America/Los_Angeles').format('h:mm A');
+    // Create a full datetime to properly handle timezone
+    const now = DateTime.now().setZone(DEFAULT_TZ);
+    const [hours, minutes] = timeString.split(':').map(Number);
+    
+    return now
+      .set({ hour: hours, minute: minutes })
+      .toFormat('h:mm a');
   };
 
   const handleAddToCalendar = (booking) => {
-    const startTime = moment.utc(`${booking.date.split('T')[0]}T${booking.startTime}`);
-    const endTime = moment.utc(`${booking.date.split('T')[0]}T${booking.endTime}`);
+    const startTime = DateTime.fromISO(booking.date)
+      .setZone(DEFAULT_TZ)
+      .set({
+        hour: parseInt(booking.startTime.split(':')[0]),
+        minute: parseInt(booking.startTime.split(':')[1])
+      });
+      
+    const endTime = DateTime.fromISO(booking.date)
+      .setZone(DEFAULT_TZ)
+      .set({
+        hour: parseInt(booking.endTime.split(':')[0]),
+        minute: parseInt(booking.endTime.split(':')[1])
+      });
+
     const title = 'Massage Appointment';
     const location = booking.location?.address;
 
     // Format for Google Calendar
-    const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startTime.format('YYYYMMDDTHHmmss')}Z/${endTime.format('YYYYMMDDTHHmmss')}Z&location=${encodeURIComponent(location)}`;
+    const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${
+      encodeURIComponent(title)}&dates=${
+      startTime.toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")
+    }/${
+      endTime.toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'")
+    }&location=${
+      encodeURIComponent(location)}`;
+    
     window.open(googleUrl, '_blank');
   };
 
@@ -175,18 +207,17 @@ const BookingList = () => {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <span className={`px-3 py-1 rounded-full text-sm font-medium
-              ${moment.utc(booking.date).add(12, 'hours')
-                .hours(parseInt(booking.endTime.split(':')[0]))
-                .minutes(parseInt(booking.endTime.split(':')[1]))
-                .isAfter(moment()) 
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              DateTime.fromISO(booking.date)
+                .setZone(DEFAULT_TZ)
+                .plus({ minutes: booking.duration }) > DateTime.now().setZone(DEFAULT_TZ)
                 ? 'bg-green-100 text-green-800' 
                 : 'bg-slate-100 text-slate-800'}`}
             >
-              {moment.utc(booking.date).add(12, 'hours')
-                .hours(parseInt(booking.endTime.split(':')[0]))
-                .minutes(parseInt(booking.endTime.split(':')[1]))
-                .isAfter(moment()) ? 'Upcoming' : 'Past'}
+              {DateTime.fromISO(booking.date)
+                .setZone(DEFAULT_TZ)
+                .plus({ minutes: booking.duration }) > DateTime.now().setZone(DEFAULT_TZ)
+                ? 'Upcoming' : 'Past'}
             </span>
           </div>
         </div>
@@ -216,30 +247,17 @@ const BookingList = () => {
           <button
             onClick={() => handleAddToCalendar(booking)}
             className="inline-flex items-center px-3 py-1.5 bg-white border border-slate-300
-              text-sm font-medium rounded-md text-slate-700 hover:bg-slate-50
-              focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-              transition-colors duration-200 ease-in-out"
+              text-sm font-medium rounded-md text-slate-700 hover:bg-slate-50"
           >
-            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" 
-              />
-            </svg>
+            <Calendar className="w-4 h-4 mr-1.5" />
             Add to Calendar
           </button>
 
           <button 
-            className="inline-flex items-center px-3 py-1.5 bg-white border border-red-300
-              text-sm font-medium rounded-md text-red-700 hover:bg-red-50
-              focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500
-              transition-colors duration-200 ease-in-out"
             onClick={() => handleCancelBooking(booking._id)}
+            className="inline-flex items-center px-3 py-1.5 bg-white border border-red-300
+              text-sm font-medium rounded-md text-red-700 hover:bg-red-50"
           >
-            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" 
-              />
-            </svg>
             Cancel
           </button>
         </div>

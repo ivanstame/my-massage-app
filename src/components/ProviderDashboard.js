@@ -1,7 +1,11 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../AuthContext';
 import { Calendar, Users, Clock, Settings, CreditCard, Map, Mail } from 'lucide-react';
+import api from '../services/api';
+import { DateTime } from "luxon";
+
+
 
 const StatCard = ({ icon: Icon, label, value, description }) => (
   <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
@@ -30,6 +34,26 @@ const ProviderDashboard = () => {
     return null;
   }
 
+  // Add the stats state and fetching
+const [stats, setStats] = useState({ total: 0, completed: 0, upcoming: 0 });
+const [statsLoading, setStatsLoading] = useState(true);
+
+useEffect(() => {
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/api/bookings?stats=today');
+      setStats(response.data);
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  fetchStats();
+}, []);
+  
+
   return (
     <div className="pt-16">
       <div className="max-w-7xl mx-auto p-4">
@@ -46,12 +70,15 @@ const ProviderDashboard = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatCard
-            icon={Calendar}
-            label="Today's Appointments"
-            value="5"
-            description="2 completed, 3 upcoming"
-          />
+        <StatCard
+  icon={Calendar}
+  label="Today's Appointments"
+  value={statsLoading ? '...' : stats.total}
+  description={statsLoading ? 
+    'Loading...' : 
+    `${stats.completed} completed, ${stats.upcoming} upcoming`
+  }
+/>
           <StatCard
             icon={Users}
             label="Active Clients"

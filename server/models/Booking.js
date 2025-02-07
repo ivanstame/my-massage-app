@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { DateTime } = require('luxon');
-const { DEFAULT_TZ, TIME_FORMATS } = require('../../src/utils/timeConstants');
-const LuxonService = require('../utils/LuxonService');
+const { DEFAULT_TZ, TIME_FORMATS } = require('../../shared/utils/timeConstants');
+const LuxonService = require('../../shared/utils/LuxonService');
 
 const LocationSchema = new mongoose.Schema({
   lat: {

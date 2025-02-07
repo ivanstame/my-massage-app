@@ -9,8 +9,8 @@ import { bookingService } from '../services/bookingService';
 import api from '../services/api';
 import { CheckCircle, Users, HourglassIcon, Clock, MapPin, AlertCircle, Check, Calendar, Info } from 'lucide-react';
 import { DateTime } from 'luxon';
-import LuxonService from '../utils/LuxonService';
-import { TIME_FORMATS, DEFAULT_TZ } from '../utils/timeConstants';
+import { DEFAULT_TZ, TIME_FORMATS } from '../../shared/utils/timeConstants';
+import LuxonService from '../../shared/utils/LuxonService';
 
 
 const convertTo12Hour = (time24) => {

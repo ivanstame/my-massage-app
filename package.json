@@ -1,0 +1,82 @@
+{
+  "name": "my-massage-app",
+  "version": "1.0.0",
+  "description": "My Massage Booking App",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "server": "nodemon server/server.js",
+    "client": "react-scripts start",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "react-scripts build",
+    "test": "jest",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "@radix-ui/react-popover": "^1.1.2",
+    "@react-google-maps/api": "^2.19.3",
+    "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "connect-mongo": "^5.1.0",
+    "cors": "^2.8.5",
+    "cypress": "^13.15.0",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1",
+    "express-validator": "^7.2.0",
+    "full-icu": "^1.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.454.0",
+    "luxon": "^3.5.0",
+    "moment-timezone": "^0.5.46",
+    "mongoose": "^5.12.3",
+    "node-cache": "^5.1.2",
+    "opossum": "^8.1.4",
+    "p-limit": "^3.1.0",
+    "passport": "^0.7.0",
+    "passport-local": "^1.0.0",
+    "react": "^18.3.1",
+    "react-calendar": "^5.0.0",
+    "react-datepicker": "^7.3.0",
+    "react-dom": "^18.3.1",
+    "react-feather": "^2.0.10",
+    "react-google-autocomplete": "^2.7.3",
+    "react-router-dom": "^6.26.1",
+    "react-transition-group": "^4.4.5",
+    "recharts": "^2.15.0",
+    "tailwind-merge": "^2.5.4",
+    "tailwindcss-animate": "^1.0.7",
+    "winston": "^3.15.0"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.16.7",
+    "@babel/preset-env": "^7.26.7",
+    "@types/node": "^22.9.1",
+    "autoprefixer": "^10.4.20",
+    "babel-jest": "^29.7.0",
+    "concurrently": "^8.2.2",
+    "jest": "^27.5.1",
+    "nodemon": "^3.1.4",
+    "postcss": "^8.4.42",
+    "react-scripts": "^5.0.1",
+    "tailwindcss": "^3.4.10"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "proxy": "http://localhost:5000"
+}

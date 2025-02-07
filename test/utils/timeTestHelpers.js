@@ -44,3 +44,24 @@ export function multiSessionEdgeCases() {
     }
   };
 }
+
+export const MULTI_SESSION_CASES = {                                                                                                                                   
+  valid: {                                                                                                                                                             
+    durations: [90, 60],                                                                                                                                               
+    buffer: 15,                                                                                                                                                        
+    startTime: '09:00',                                                                                                                                                
+    expectedCount: 2                                                                                                                                                   
+  },                                                                                                                                                                   
+  spansDST: {                                                                                                                                                          
+    durations: [120, 60],                                                                                                                                              
+    buffer: 30,                                                                                                                                                        
+    startTime: '01:30', // Spring forward test case                                                                                                                    
+    date: '2023-03-12'                                                                                                                                                 
+  },                                                                                                                                                                   
+  overnight: {                                                                                                                                                         
+    durations: [240, 60],                                                                                                                                              
+    buffer: 30,                                                                                                                                                        
+    startTime: '21:00',                                                                                                                                                
+    expectedError: 'OUTSIDE_WORK_HOURS'                                                                                                                                
+  }                                                                                                                                                                    
+};          

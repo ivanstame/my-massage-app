@@ -1,14 +1,13 @@
-import { DateTime, Settings } from 'luxon';
-import { DEFAULT_TZ, UTC_TZ, TIME_FORMATS } from './timeConstants';
+// shared/utils/LuxonService.js
+const { DateTime, Settings } = require('luxon');
+const { DEFAULT_TZ, UTC_TZ, TIME_FORMATS } = require('./timeConstants');
+
+// Set default timezone for all Luxon operations
+Settings.defaultZone = DEFAULT_TZ;
 
 class LuxonService {
-  // Set default timezone for all Luxon operations
-  static init() {
-    Settings.defaultZone = DEFAULT_TZ;
-  }
-
   // Convert JS Date to LA time DateTime
-  static convertToLA(date, format = TIME_FORMATS.ISO_DATETIME) {
+  static convertToLA(date) {
     return DateTime.fromJSDate(date).setZone(DEFAULT_TZ);
   }
 
@@ -37,6 +36,61 @@ class LuxonService {
     return slots;
   }
 
+  // Generate and validate multi-session slots
+  static generateMultiSessionSlots(
+    startTimeLA,       // DateTime in LA time
+    sessionDurations,  // array of minutes [90, 60, ...]
+    bufferMinutes,     // between sessions
+    workDayStart,      // number (6 = 6 AM)
+    workDayEnd         // number (22 = 10 PM)
+  ) {
+    // Convert all times to LA zone for calculations
+    let currentSlot = startTimeLA.setZone(DEFAULT_TZ);
+    const slots = [];
+    let isValid = true;
+
+    // Check each session fits in the work day
+    for (const [index, duration] of sessionDurations.entries()) {
+      const sessionEnd = currentSlot.plus({ minutes: duration });
+
+      // Check work hours in LA time
+      const startHour = currentSlot.hour + currentSlot.minute/60;
+      const endHour = sessionEnd.hour + sessionEnd.minute/60;
+
+      if (startHour < workDayStart || endHour > workDayEnd) {
+        isValid = false;
+        break;
+      }
+
+      // Check DST consistency
+      if (currentSlot.isInDST !== sessionEnd.isInDST) {
+        isValid = false;
+        break;
+      }
+
+      slots.push({
+        sessionNumber: index + 1,
+        localStart: currentSlot.toFormat(TIME_FORMATS.TIME_12H),
+        localEnd: sessionEnd.toFormat(TIME_FORMATS.TIME_12H),
+        utcStart: currentSlot.toUTC().toISO(),
+        utcEnd: sessionEnd.toUTC().toISO(),
+        durationMinutes: duration
+      });
+
+      // Add buffer between sessions
+      currentSlot = sessionEnd.plus({ minutes: bufferMinutes });
+    }
+
+    return {
+      isValid,
+      slots: isValid ? slots : [],
+      validationErrors: isValid ? [] : [
+        'SLOT_INVALID_REASON_DST_TRANSITION',
+        'SLOT_INVALID_REASON_OUTSIDE_WORK_HOURS'
+      ]
+    };
+  }
+
   // Validate date range stays within same day in LA time
   static validateSameDay(startUTC, endUTC) {
     const startLA = DateTime.fromISO(startUTC).setZone(DEFAULT_TZ);
@@ -52,4 +106,4 @@ class LuxonService {
   }
 }
 
-export default LuxonService;
+module.exports = LuxonService;

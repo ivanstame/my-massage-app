@@ -1,0 +1,244 @@
+openapi: 3.0.0
+info:
+  title: Booking API
+  version: 1.0.0
+  description: API for managing massage bookings
+servers:
+  - url: https://api.massagebyivan.com/v1
+    description: Production server
+  - url: http://localhost:5000/v1
+    description: Development server
+
+paths:
+  /bookings:
+    post:
+      summary: Create a new booking
+      description: Create a new massage booking for a client
+      operationId: createBooking
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+      responses:
+
+
+    get:
+      summary: Get bookings
+      description: Retrieve bookings based on user role
+      operationId: getBookings
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Booking'
+        '403':
+          description: Unauthorized access
+        '500':
+          description: Internal server error
+
+  /bookings/{id}:
+    delete:
+      summary: Cancel a booking
+      description: Cancel an existing booking
+      operationId: cancelBooking
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Booking cancelled successfully
+        '403':
+          description: Unauthorized access
+        '404':
+          description: Booking not found
+        '500':
+          description: Internal server error
+
+  /availability:
+    get:
+      summary: Get available slots
+      description: Get available time slots considering travel time
+      operationId: getAvailability
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: duration
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 30
+            maximum: 240
+        - name: location
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of available slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  format: time
+        '400':
+          description: Invalid request parameters
+        '500':
+          description: Internal server error
+
+  /bookings/bulk:
+    post:
+      summary: Create multiple bookings
+      description: Create multiple back-to-back sessions
+      operationId: createBulkBookings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/BookingRequest'
+      responses:
+        '201':
+          description: Bookings created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Booking'
+          headers:
+            X-RateLimit-Limit:
+              description: Request limit per hour
+              schema:
+                type: integer
+                example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests
+              schema:
+                type: integer
+                example: 99
+        '400':
+          description: Invalid request or slots unavailable
+        '403':
+          description: Unauthorized access
+        '429':
+          description: Too many requests
+        '500':
+          description: Internal server error
+      x-code-samples:
+        - lang: JavaScript
+          source: |
+            const createBulkBookings = async (bookings) => {
+              const response = await fetch('/api/bookings/bulk', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(bookings)
+              });
+              
+              if (!response.ok) {
+                throw new Error('Failed to create bookings');
+              }
+              
+              return response.json();
+            };
+
+components:
+  schemas:
+    BookingRequest:
+      type: object
+      required:
+        - date
+        - time
+        - duration
+        - location
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2025-01-25"
+        time:
+          type: string
+          format: time
+          example: "14:00"
+        duration:
+          type: integer
+          minimum: 30
+          maximum: 240
+          example: 60
+        location:
+          $ref: '#/components/schemas/Location'
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+        client:
+          type: string
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          format: time
+        endTime:
+          type: string
+          format: time
+        duration:
+          type: integer
+        location:
+          $ref: '#/components/schemas/Location'
+        price:
+          type: number
+        status:
+          type: string
+          enum: [pending, confirmed, cancelled]
+
+    Location:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        address:
+          type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

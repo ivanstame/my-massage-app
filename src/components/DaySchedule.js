@@ -1,7 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DateTime } from 'luxon';
-import { DEFAULT_TZ, TIME_FORMATS } from '../utils/timeConstants';
+import { DEFAULT_TZ, TIME_FORMATS } from '../../shared/utils/timeConstants';
+import LuxonService from '../../shared/utils/LuxonService';
 
 const DaySchedule = ({ date, availabilityBlocks, bookings, onModify, serviceArea }) => {
   const navigate = useNavigate();

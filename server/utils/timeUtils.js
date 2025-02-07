@@ -1,9 +1,9 @@
 // timeUtils.js
 
 const { DateTime } = require('luxon');
+const { DEFAULT_TZ, TIME_FORMATS } = require('../../src/utils/timeConstants');
+const LuxonService = require('../utils/LuxonService');
 const { calculateTravelTime } = require('../services/mapService'); // Adjust the path as necessary
-const { DEFAULT_TZ } = require('../../src/utils/timeConstants');
-const { TIME_FORMATS } = require('../../src/utils/timeConstants');
 const { validateProviderTravel } = require('../services/mapService');
 
 const laZone = 'America/Los_Angeles';
