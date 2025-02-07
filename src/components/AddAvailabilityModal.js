@@ -1,54 +1,57 @@
 import React, { useState } from 'react';
 import { Clock, MapPin, AlertCircle } from 'lucide-react';
+import { DateTime } from 'luxon';
+import { DEFAULT_TZ, TIME_FORMATS } from '../../utils/timeConstants';
 
 const AddAvailabilityModal = ({ date, onAdd, onClose, serviceArea }) => {
-  const [startTime, setStartTime] = useState('09:00 AM');
-  const [endTime, setEndTime] = useState('05:00 PM');
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('17:00');
   const [type, setType] = useState('autobook');
   const [error, setError] = useState(null);
 
   const generateTimeOptions = () => {
-    const options = [];
-    for (let hour = 0; hour < 24; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const displayHour = hour % 12 || 12;
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const time = `${displayHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${period}`;
-        options.push(<option key={time} value={time}>{time}</option>);
-      }
+    const slots = [];
+    let currentTime = DateTime.fromObject({ hour: 0, minute: 0 }, { zone: DEFAULT_TZ });
+    const endOfDay = DateTime.fromObject({ hour: 23, minute: 30 }, { zone: DEFAULT_TZ });
+
+    while (currentTime <= endOfDay) {
+      slots.push(
+        <option key={currentTime.toFormat('HH:mm')} value={currentTime.toFormat('HH:mm')}>
+          {currentTime.toFormat(TIME_FORMATS.TIME_12H)}
+        </option>
+      );
+      currentTime = currentTime.plus({ minutes: 30 });
     }
-    return options;
+    return slots;
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setError(null);
 
-    // Proper time conversion using Luxon
-    const toUTC = (time12h) => {
-      const [timePart, period] = time12h.split(' ');
-      let [hours, minutes] = timePart.split(':').map(Number);
-      
-      // Convert to 24-hour format
-      if (period === 'PM' && hours !== 12) hours += 12;
-      if (period === 'AM' && hours === 12) hours = 0;
+    const dateLA = DateTime.fromJSDate(date).setZone(DEFAULT_TZ);
+    
+    // Convert times to UTC
+    const startDateTime = DateTime.fromFormat(`${dateLA.toFormat('yyyy-MM-dd')} ${startTime}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
+    const endDateTime = DateTime.fromFormat(`${dateLA.toFormat('yyyy-MM-dd')} ${endTime}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
 
-      // Create DateTime in LA timezone
-      const laDateTime = DateTime.fromJSDate(date)
-        .setZone('America/Los_Angeles')
-        .set({ hour: hours, minute: minutes });
+    // Validate times
+    if (!startDateTime.isValid || !endDateTime.isValid) {
+      setError('Invalid time format');
+      return;
+    }
 
-      // Convert to UTC and format
-      return laDateTime.toUTC().toFormat('HH:mm');
-    };
+    if (endDateTime <= startDateTime) {
+      setError('End time must be after start time');
+      return;
+    }
 
     const availability = {
-      date: new Date(date), // Pass raw date
-      start: toUTC(startTime),
-      end: toUTC(endTime),
+      date: dateLA.toJSDate(),
+      start: startTime,
+      end: endTime,
       type,
-      serviceArea,
-      provider: serviceArea.providerId // Add provider reference
+      serviceArea
     };
 
     onAdd(availability);

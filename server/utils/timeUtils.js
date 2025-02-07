@@ -2,6 +2,9 @@
 
 const { DateTime } = require('luxon');
 const { calculateTravelTime } = require('../services/mapService'); // Adjust the path as necessary
+const { DEFAULT_TZ } = require('../../src/utils/timeConstants');
+const { TIME_FORMATS } = require('../../src/utils/timeConstants');
+const { validateProviderTravel } = require('../services/mapService');
 
 const laZone = 'America/Los_Angeles';
 
@@ -28,7 +31,7 @@ const calculateBufferBetweenBookings = (booking1, booking2, defaultBuffer = 15, 
   if (booking1.groupId && booking1.isLastInGroup && booking1.extraDepartureBuffer) {
     // Count how many bookings share that groupId
     const groupSize = allBookings.filter(b => b.groupId === booking1.groupId).length;
-    // Example: 15 minutes * groupSize + extraDepartureBuffer
+    // Add extra buffer based on group size
     return defaultBuffer * groupSize + booking1.extraDepartureBuffer;
   }
 
@@ -101,17 +104,33 @@ const validateMultiSessionSlot = async (
 // Generate time slots in half-hour increments
 //
 function generateTimeSlots(startTime, endTime, intervalMinutes, appointmentDuration) {
+  // Convert to LA timezone for calculations
+  const startDT = DateTime.fromISO(startTime, { zone: DEFAULT_TZ });
+  const endDT = DateTime.fromISO(endTime, { zone: DEFAULT_TZ });
   const slots = [];
-  let currentTime = new Date(startTime);
+  let currentSlot = startDT;
 
-  // If appointmentDuration is an array, pick the longest session as a baseline
-  const appointmentDurationMs = Array.isArray(appointmentDuration)
-    ? Math.max(...appointmentDuration) * 60000
-    : appointmentDuration * 60000;
+  // If appointmentDuration is an array (multi-session), use the longest duration
+  const maxDuration = Array.isArray(appointmentDuration) 
+    ? Math.max(...appointmentDuration) 
+    : appointmentDuration;
 
-  while (currentTime <= new Date(endTime.getTime() - appointmentDurationMs)) {
-    slots.push(new Date(currentTime));
-    currentTime.setMinutes(currentTime.getMinutes() + intervalMinutes);
+  while (currentSlot <= endDT.minus({ minutes: maxDuration })) {
+    // Skip slots that would create appointments spanning DST transitions
+    const slotEnd = currentSlot.plus({ minutes: maxDuration });
+    if (!LuxonService.checkDSTTransition(
+      currentSlot.toISO(), 
+      slotEnd.toISO()
+    )) {
+      slots.push({
+        start: currentSlot.toUTC().toISO(),
+        end: slotEnd.toUTC().toISO(),
+        localStart: currentSlot.toFormat(TIME_FORMATS.TIME_12H),
+        localEnd: slotEnd.toFormat(TIME_FORMATS.TIME_12H)
+      });
+    }
+
+    currentSlot = currentSlot.plus({ minutes: intervalMinutes });
   }
 
   return slots;
@@ -130,18 +149,28 @@ function removeOccupiedSlots(
 ) {
   // If appointmentDuration is an array, use the longest duration as a baseline
   const appointmentDurationMs = Array.isArray(appointmentDuration)
-    ? Math.max(...appointmentDuration) * 60000
-    : appointmentDuration * 60000;
+    ? Math.max(...appointmentDuration) * 60 * 1000
+    : appointmentDuration * 60 * 1000;
 
   return slots.filter(slot => {
-    const slotStart = new Date(slot);
-    const slotEnd = new Date(slotStart.getTime() + appointmentDurationMs);
+    // Convert slot to Luxon DateTime in LA timezone
+    const slotStart = DateTime.fromJSDate(slot).setZone(DEFAULT_TZ);
+    const slotEnd = slotStart.plus({ milliseconds: appointmentDurationMs });
 
     return !bookings.some(booking => {
-      const bookingStart = new Date(`${booking.date.toISOString().split('T')[0]}T${booking.startTime}`);
-      const bookingEnd = new Date(`${booking.date.toISOString().split('T')[0]}T${booking.endTime}`);
+      // Convert booking times to Luxon DateTime in LA timezone
+      const bookingStart = DateTime.fromFormat(
+        `${booking.date.toISOString().split('T')[0]} ${booking.startTime}`,
+        'yyyy-MM-dd HH:mm',
+        { zone: DEFAULT_TZ }
+      );
+      const bookingEnd = DateTime.fromFormat(
+        `${booking.date.toISOString().split('T')[0]} ${booking.endTime}`,
+        'yyyy-MM-dd HH:mm',
+        { zone: DEFAULT_TZ }
+      );
 
-      // Calculate a dynamic buffer
+      // Calculate dynamic buffer based on booking context
       const buffer = calculateBufferBetweenBookings(
         { groupId: requestedGroupId, location: clientLocation },
         booking,
@@ -149,11 +178,12 @@ function removeOccupiedSlots(
         bookings
       );
 
-      const bufferTimeMs = buffer * 60000;
-      const occupiedStart = new Date(bookingStart.getTime() - bufferTimeMs);
-      const occupiedEnd = new Date(bookingEnd.getTime() + bufferTimeMs);
+      const bufferMs = buffer * 60 * 1000;
+      const occupiedStart = bookingStart.minus({ milliseconds: bufferMs });
+      const occupiedEnd = bookingEnd.plus({ milliseconds: bufferMs });
 
-      return (slotStart < occupiedEnd && slotEnd > occupiedStart);
+      // Check if slot overlaps with occupied time (including buffer)
+      return slotStart < occupiedEnd && slotEnd > occupiedStart;
     });
   });
 }
@@ -378,5 +408,6 @@ module.exports = {
   getAvailableTimeSlots,
   generateTimeSlots,
   removeOccupiedSlots,
-  validateSlots
+  validateSlots,
+  calculateBufferBetweenBookings
 };

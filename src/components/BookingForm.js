@@ -8,6 +8,10 @@ import SessionConfigWizard from './SessionConfigWizard';
 import { bookingService } from '../services/bookingService';
 import api from '../services/api';
 import { CheckCircle, Users, HourglassIcon, Clock, MapPin, AlertCircle, Check, Calendar, Info } from 'lucide-react';
+import { DateTime } from 'luxon';
+import LuxonService from '../utils/LuxonService';
+import { TIME_FORMATS, DEFAULT_TZ } from '../utils/timeConstants';
+
 
 const convertTo12Hour = (time24) => {
   // Ensure format is HH:mm
@@ -161,7 +165,7 @@ const BookingForm = ({ googleMapsLoaded }) => {
       setAvailableSlots([]);
       return;
     }
-
+  
     if (!fullAddress || (!selectedDuration && !sessionDurations.length)) {
       setAvailableSlots([]);
       return;
@@ -177,12 +181,17 @@ const BookingForm = ({ googleMapsLoaded }) => {
       const geocodeResponse = await api.get('/api/geocode', {
         params: { address: fullAddress }
       });
-
+  
       const { lat, lng } = geocodeResponse.data;
-
+  
+      // Convert selected date to LA timezone for API
+      const laDate = DateTime.fromJSDate(selectedDate)
+        .setZone(DEFAULT_TZ)
+        .toFormat('yyyy-MM-dd');
+  
       // Then fetch available slots with provider context
       const response = await api.get(
-        `/api/availability/available/${selectedDate.toISOString().split('T')[0]}`,
+        `/api/availability/available/${laDate}`,
         {
           params: {
             providerId,
@@ -195,25 +204,17 @@ const BookingForm = ({ googleMapsLoaded }) => {
             sessionDurations: sessionDurations.length ? JSON.stringify(sessionDurations) : null
           }
         }
-      ).catch(error => {
-        console.error('API Error:', error.response?.data || error.message);
-        throw error;
+      );
+  
+      // Transform slots to use Luxon formatting
+      const formattedSlots = response.data.map(slot => {
+        const slotDT = DateTime.fromFormat(slot, 'HH:mm', { zone: DEFAULT_TZ });
+        return {
+          original: slot,
+          formatted: slotDT.toFormat(TIME_FORMATS.TIME_12H)
+        };
       });
-
-      console.log('API Response:', response.data);
-
-      // Ensure we have an array of slots
-      const slots = Array.isArray(response.data) ? response.data 
-                   : Array.isArray(response.data.slots) ? response.data.slots 
-                   : [];
-
-      console.log('Parsed slots:', slots);
-                   
-      // Transform
-      const formattedSlots = slots.map(slot => ({
-        original: slot,
-        formatted: convertTo12Hour(slot)
-      }));
+  
       setAvailableSlots(formattedSlots);
       setError(null);
     } catch (err) {
@@ -223,6 +224,7 @@ const BookingForm = ({ googleMapsLoaded }) => {
       setLoading(false);
     }
   };
+  
 
   // Re-fetch slots if address or selectedDuration changes, etc.
   useEffect(() => {
@@ -259,66 +261,87 @@ const BookingForm = ({ googleMapsLoaded }) => {
 
   // Handle Submit Booking
   const handleSubmit = async () => {
-    if (loading) return; // Prevent double submission
+    if (loading) return;
     setError(null);
     setLoading(true);
     try {
+      if (!selectedDate) throw new Error('Selected date is missing');
+      if (!selectedTime) throw new Error('Selected time is missing');
+      if (!fullAddress) throw new Error('Full address is missing');
+      if (!location || location.lat == null || location.lng == null)
+        throw new Error('Location data is incomplete');
+  
+      const bookingDateLA = DateTime.fromJSDate(selectedDate)
+        .setZone(DEFAULT_TZ);
+      const bookingDateStr = bookingDateLA.toFormat('yyyy-MM-dd');
+  
       if (numSessions === 1) {
+        if (!selectedDuration) throw new Error('Selected duration is missing');
+  
         const bookingData = {
-          date: selectedDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+          date: bookingDateStr,
           time: selectedTime.original,
           duration: selectedDuration,
           location: {
             address: fullAddress,
-            lat: location?.lat || null,
-            lng: location?.lng || null
+            lat: location.lat,
+            lng: location.lng
           }
         };
+  
         const response = await bookingService.createBooking(bookingData);
+        if (!response || !response._id) {
+          throw new Error('Invalid booking response: ' + JSON.stringify(response));
+        }
         setNewBookingId(response._id);
         setBookingSuccess(true);
       } else {
-        // multi-session
-        let currentSessionStart = selectedTime.original; 
-        // e.g. "12:00" from the first chosen time
-
+        if (sessionDurations.length !== numSessions)
+          throw new Error('Session durations count mismatch');
+        if (sessionNames.length !== numSessions)
+          throw new Error('Session names count mismatch');
+  
+        let currentSessionStart = selectedTime.original;
         const bookingDataArray = sessionDurations.map((dur, i) => {
-          // Parse the currentSessionStart into a date object for arithmetic
-          const [startHr, startMin] = currentSessionStart.split(':').map(Number);
-          const sessionDateObj = new Date(`${selectedDate.toISOString().split('T')[0]}T${currentSessionStart}`);
-
-          // Build the booking data for THIS session
+          const startDT = DateTime.fromFormat(
+            `${bookingDateStr} ${currentSessionStart}`, 
+            'yyyy-MM-dd HH:mm',
+            { zone: DEFAULT_TZ }
+          );
+  
+          if (!startDT.isValid)
+            throw new Error(`Session ${i + 1} start time is invalid: ${currentSessionStart}`);
+  
           const bookingData = {
-            date: selectedDate.toISOString().split('T')[0],
-            time: currentSessionStart,        // "HH:MM" string
+            date: bookingDateStr,
+            time: currentSessionStart,
             occupantName: sessionNames[i],
             duration: dur,
             location: {
               address: fullAddress,
-              lat: location?.lat || null,
-              lng: location?.lng || null
+              lat: location.lat,
+              lng: location.lng
             }
           };
-
-          // Compute the NEXT session's start time by adding `dur` minutes
-          // so the next iteration uses that as its starting time
-          const nextStartTimeMs = sessionDateObj.getTime() + dur * 60000;
-          const nextDateObj = new Date(nextStartTimeMs);
-          const endHr = String(nextDateObj.getHours()).padStart(2, '0');
-          const endMin = String(nextDateObj.getMinutes()).padStart(2, '0');
-
-          // Update currentSessionStart for the next session in the loop
-          currentSessionStart = `${endHr}:${endMin}`;
-
+  
+          // Calculate next session start time
+          const nextStartDT = startDT.plus({ minutes: dur });
+          currentSessionStart = nextStartDT.toFormat('HH:mm');
+  
           return bookingData;
         });
+  
         const response = await api.post('/api/bookings/bulk', bookingDataArray);
+  
+        if (!Array.isArray(response.data) || !response.data[0]?._id) {
+          throw new Error('Invalid bulk booking response: ' + JSON.stringify(response.data));
+        }
         setNewBookingId(response.data[0]._id);
         setBookingSuccess(true);
       }
     } catch (err) {
       console.error('Error creating booking:', err);
-      setError(err.response?.data?.message || 'Failed to create booking. Please try again.');
+      setError(err.response?.data?.message || err.message || 'Failed to create booking');
       setBookingSuccess(false);
     } finally {
       setLoading(false);
@@ -355,6 +378,130 @@ const BookingForm = ({ googleMapsLoaded }) => {
       </div>
     )
   );
+
+  // Inside BookingForm component
+
+const formatDate = (date) => {
+  return DateTime.fromJSDate(date)
+    .setZone(DEFAULT_TZ)
+    .toFormat('cccc, LLLL d, yyyy');
+};
+
+const formatPeriod = (slot) => {
+  const hour = parseInt(slot.split(':')[0]);
+  if (hour >= 6 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  return 'evening';
+};
+
+const renderTimeSlots = () => (
+  <div className="space-y-6">
+    {/* Morning Section */}
+    <div>
+      <h3 className="text-sm font-medium text-slate-700 mb-2">Morning</h3>
+      <div className="grid grid-cols-4 gap-2">
+        {(!selectedDuration && sessionDurations.length === 0) ? (
+          Array(4).fill(null).map((_, idx) => (
+            <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50" />
+          ))
+        ) : !availableSlots.length ? (
+          Array(4).fill(null).map((_, idx) => (
+            <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50" />
+          ))
+        ) : (
+          availableSlots
+            .filter(slot => formatPeriod(slot.original) === 'morning')
+            .map(slot => (
+              <button
+                key={slot.original}
+                onClick={() => setSelectedTime(slot)}
+                className={`p-2 text-center rounded border transition-all ${
+                  selectedTime?.original === slot.original 
+                    ? 'bg-blue-500 text-white border-blue-500' 
+                    : 'hover:border-blue-500 hover:bg-blue-50'
+                }`}
+              >
+                <span className="formatted-time">{slot.formatted}</span>
+              </button>
+            ))
+        )}
+      </div>
+    </div>
+
+    {/* Afternoon Section */}
+    <div>
+      <h3 className="text-sm font-medium text-slate-700 mb-2">Afternoon</h3>
+      <div className="grid grid-cols-4 gap-2">
+        {availableSlots
+          .filter(slot => formatPeriod(slot.original) === 'afternoon')
+          .map(slot => (
+            <button
+              key={slot.original}
+              onClick={() => setSelectedTime(slot)}
+              className={`p-2 text-center rounded border transition-all ${
+                selectedTime?.original === slot.original 
+                  ? 'bg-blue-500 text-white border-blue-500' 
+                  : 'hover:border-blue-500 hover:bg-blue-50'
+              }`}
+            >
+              {slot.formatted}
+            </button>
+          ))}
+      </div>
+    </div>
+
+    {/* Evening Section */}
+    <div>
+      <h3 className="text-sm font-medium text-slate-700 mb-2">Evening</h3>
+      <div className="grid grid-cols-4 gap-2">
+        {availableSlots
+          .filter(slot => formatPeriod(slot.original) === 'evening')
+          .map(slot => (
+            <button
+              key={slot.original}
+              onClick={() => setSelectedTime(slot)}
+              className={`p-2 text-center rounded border transition-all ${
+                selectedTime?.original === slot.original 
+                  ? 'bg-blue-500 text-white border-blue-500' 
+                  : 'hover:border-blue-500 hover:bg-blue-50'
+              }`}
+            >
+              {slot.formatted}
+            </button>
+          ))}
+      </div>
+    </div>
+  </div>
+);
+
+// Confirmation modal formatting
+const renderBookingConfirmation = () => (
+  <div className="text-sm text-gray-500 mb-6">
+    {numSessions === 1 ? (
+      `Your single session is scheduled at ${selectedTime?.formatted} on 
+      ${formatDate(selectedDate)}, address: ${fullAddress}.`
+    ) : (
+      <>
+        <div>
+          {`Your ${numSessions} back-to-back sessions have been scheduled for 
+          ${formatDate(selectedDate)} at ${selectedTime?.formatted}.`}
+        </div>
+        <div className="mt-2 text-left">
+          {sessionDurations.map((dur, i) => (
+            <div key={i} className="mt-1 pl-4 border-l-2 border-blue-200">
+              <div className="font-medium">
+                {`Session ${i + 1}: ${sessionNames[i] || 'No Name'} (${dur} minutes)`}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4">
+          {`Address: ${fullAddress}`}
+        </div>
+      </>
+    )}
+  </div>
+);
 
   return (
     <div className="pt-16">
@@ -564,146 +711,33 @@ const BookingForm = ({ googleMapsLoaded }) => {
           )}
         </div>
 
-        {/* Time Period / Available Slots */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200">
-            <div className="flex items-center mb-3 border-b pb-2">
-              <Clock className="w-5 h-5 text-blue-500 mr-2" />
-              <h2 className="font-medium">Available Times</h2>
-              {!selectedTime && availableSlots.length > 0 && (
-                <span className="ml-2 text-sm text-blue-600">(Select a time to continue)</span>
-              )}
-            </div>
+{/* Time Period / Available Slots */}
+<div className="space-y-4">
+  <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200">
+    <div className="flex items-center mb-3 border-b pb-2">
+      <Clock className="w-5 h-5 text-blue-500 mr-2" />
+      <h2 className="font-medium">Available Times</h2>
+      {!selectedTime && availableSlots.length > 0 && (
+        <span className="ml-2 text-sm text-blue-600">(Select a time to continue)</span>
+      )}
+    </div>
 
-            <div className="space-y-6">
-              {/* Morning Section */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-700 mb-2">Morning</h3>
-                <div className="grid grid-cols-4 gap-2">
-                  {(!selectedDuration && sessionDurations.length === 0) ? (
-                    Array(4).fill(null).map((_, idx) => (
-                      <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50">
-                        
-                      </div>
-                    ))
-                  ) : !availableSlots.length ? (
-                    Array(4).fill(null).map((_, idx) => (
-                      <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50">
-                        
-                      </div>
-                    ))
-                  ) : (
-                    availableSlots
-                      .filter(slot => filterSlotByPeriod(slot.original, 'morning'))
-                      .map(slot => (
-                        <button
-                          key={slot.original}
-                          onClick={() => setSelectedTime(slot)}
-                          className={`p-2 text-center rounded border transition-all time-slot ${
-                            selectedTime?.original === slot.original 
-                              ? 'bg-blue-500 text-white border-blue-500' 
-                              : 'hover:border-blue-500 hover:bg-blue-50'
-                          }`}
-                        >
-                          <span className="formatted-time">{slot.formatted}</span>
-                          <span className="raw-time text-xs text-gray-500 ml-2 hidden group-hover:inline">
-                            {slot.original}
-                          </span>
-                        </button>
-                      ))
-                  )}
-                </div>
-              </div>
+    {renderTimeSlots()}
+  </div>
+</div>
 
-              {/* Afternoon Section */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-700 mb-2">Afternoon</h3>
-                <div className="grid grid-cols-4 gap-2">
-                  {(!selectedDuration && sessionDurations.length === 0) ? (
-                    Array(4).fill(null).map((_, idx) => (
-                      <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50">
-                        
-                      </div>
-                    ))
-                  ) : !availableSlots.length ? (
-                    Array(4).fill(null).map((_, idx) => (
-                      <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50">
-                        
-                      </div>
-                    ))
-                  ) : (
-                    availableSlots
-                      .filter(slot => filterSlotByPeriod(slot.original, 'afternoon'))
-                      .map(slot => (
-                        <button
-                          key={slot.original}
-                          onClick={() => setSelectedTime(slot)}
-                          className={`p-2 text-center rounded border transition-all ${
-                            selectedTime?.original === slot.original 
-                              ? 'bg-blue-500 text-white border-blue-500' 
-                              : 'hover:border-blue-500 hover:bg-blue-50'
-                          }`}
-                        >
-                          {slot.formatted}
-                        </button>
-                      ))
-                  )}
-                </div>
-              </div>
-
-              {/* Evening Section */}
-              <div>
-                <h3 className="text-sm font-medium text-slate-700 mb-2">Evening</h3>
-                <div className="grid grid-cols-4 gap-2">
-                  {(!selectedDuration && sessionDurations.length === 0) ? (
-                    Array(4).fill(null).map((_, idx) => (
-                      <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50">
-                        
-                      </div>
-                    ))
-                  ) : !availableSlots.length ? (
-                    Array(4).fill(null).map((_, idx) => (
-                      <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50">
-                        --:-- --
-                      </div>
-                    ))
-                  ) : (
-                    availableSlots
-                      .filter(slot => filterSlotByPeriod(slot.original, 'evening'))
-                      .map(slot => (
-                        <button
-                          key={slot.original}
-                          onClick={() => setSelectedTime(slot)}
-                          className={`p-2 text-center rounded border transition-all ${
-                            selectedTime?.original === slot.original 
-                              ? 'bg-blue-500 text-white border-blue-500' 
-                              : 'hover:border-blue-500 hover:bg-blue-50'
-                          }`}
-                        >
-                          {slot.formatted}
-                        </button>
-                      ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+{/* BOOKING SUCCESS MODAL */}
+{bookingSuccess && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+      <div className="text-center">
+        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+          <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
         </div>
-
-        {/* BOOKING SUCCESS MODAL */}
-        {bookingSuccess && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-              <div className="text-center">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-                  <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Booking Confirmed!
-                </h3>
-                
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Booking Confirmed!</h3>
+        {renderBookingConfirmation()}
                 <p className="text-sm text-gray-500 mb-6">
                   {numSessions === 1 ? (
                     `Your single session is scheduled at ${selectedTime?.formatted} on 

@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const { DateTime } = require('luxon');
+const { DEFAULT_TZ, TIME_FORMATS } = require('../../src/utils/timeConstants');
+const LuxonService = require('../utils/LuxonService');
 
 const AvailabilitySchema = new mongoose.Schema({
   provider: {
@@ -7,40 +9,97 @@ const AvailabilitySchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  date: { type: Date, required: true },
-  localDate: { type: String, required: true },
-  start: { type: String, required: true },
-  end: { type: String, required: true },
-  type: { type: String, enum: ['autobook', 'unavailable'], required: true },
-  availableSlots: [{ type: String }] // New field to store available 30-minute slots
+  // Store both UTC and localDate for querying efficiency
+  date: { type: Date, required: true },          // UTC date
+  localDate: { type: String, required: true },   // LA date string (YYYY-MM-DD)
+  start: { type: String, required: true },       // Local time (HH:mm)
+  end: { type: String, required: true },         // Local time (HH:mm)
+  type: { 
+    type: String, 
+    enum: ['autobook', 'unavailable'], 
+    required: true 
+  },
+  availableSlots: [{ type: String }] // Cached 30-minute slots in local time
 });
 
-// Added pre-save hook
+// Pre-save middleware to handle timezone conversion
 AvailabilitySchema.pre('save', function(next) {
-  // Create DateTime from JS Date in LA timezone
-  const laDateTime = DateTime.fromJSDate(this.date, { zone: 'America/Los_Angeles' })
-    .startOf('day');
-  
-  // Set both date and localDate correctly
-  this.localDate = laDateTime.toFormat('yyyy-MM-dd');
-  this.date = laDateTime.toUTC().toJSDate();
-  
-  next();
+  try {
+    // Convert date string to LA DateTime
+    const laDateTime = DateTime.fromJSDate(this.date, { zone: DEFAULT_TZ })
+      .startOf('day');
+    
+    // Set both date fields
+    this.localDate = laDateTime.toFormat(TIME_FORMATS.ISO_DATE);
+    this.date = laDateTime.toUTC().toJSDate();
+
+    // Validate start and end times are within the same day
+    const startDT = DateTime.fromFormat(`${this.localDate} ${this.start}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
+    const endDT = DateTime.fromFormat(`${this.localDate} ${this.end}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
+    
+    if (!startDT.hasSame(endDT, 'day')) {
+      throw new Error('Start and end times must be within the same day');
+    }
+
+    // If this is an autobook block, generate available slots
+    if (this.type === 'autobook') {
+      const slots = LuxonService.generateTimeSlots(
+        startDT.toISO(),
+        endDT.toISO(),
+        30 // 30-minute intervals
+      );
+      this.availableSlots = slots.map(slot => slot.localStart);
+    } else {
+      this.availableSlots = [];
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
-// Compound index for provider-date queries
-AvailabilitySchema.index({ provider: 1, date: 1 });
+// Static method to find availability for a provider
+AvailabilitySchema.statics.findForProvider = async function(providerId, startDate, endDate) {
+  // Ensure dates are in LA timezone
+  const startLA = DateTime.fromJSDate(startDate, { zone: DEFAULT_TZ }).startOf('day');
+  const endLA = DateTime.fromJSDate(endDate, { zone: DEFAULT_TZ }).endOf('day');
 
-// Find availability for a specific provider
-AvailabilitySchema.statics.findForProvider = function(providerId, startDate, endDate) {
-  const query = { provider: providerId };
-  if (startDate && endDate) {
-    query.date = { 
-      $gte: startDate, 
-      $lte: endDate 
-    };
-  }
-  return this.find(query).sort({ date: 1, start: 1 });
+  return this.find({
+    provider: providerId,
+    date: {
+      $gte: startLA.toUTC().toJSDate(),
+      $lte: endLA.toUTC().toJSDate()
+    }
+  }).sort({ date: 1, start: 1 });
 };
+
+// Instance method to check if time slot is within block
+AvailabilitySchema.methods.containsSlot = function(slotTime) {
+  const slotDT = DateTime.fromISO(slotTime, { zone: DEFAULT_TZ });
+  const blockStartDT = DateTime.fromFormat(
+    `${this.localDate} ${this.start}`, 
+    'yyyy-MM-dd HH:mm',
+    { zone: DEFAULT_TZ }
+  );
+  const blockEndDT = DateTime.fromFormat(
+    `${this.localDate} ${this.end}`,
+    'yyyy-MM-dd HH:mm',
+    { zone: DEFAULT_TZ }
+  );
+
+  return slotDT >= blockStartDT && slotDT < blockEndDT;
+};
+
+// Virtual for formatted date strings
+AvailabilitySchema.virtual('formattedDate').get(function() {
+  return DateTime
+    .fromJSDate(this.date)
+    .setZone(DEFAULT_TZ)
+    .toFormat(TIME_FORMATS.HUMAN_DATE);
+});
+
+// Compound index for efficient provider-date queries
+AvailabilitySchema.index({ provider: 1, date: 1 });
 
 module.exports = mongoose.model('Availability', AvailabilitySchema);
