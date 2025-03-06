@@ -21,13 +21,26 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const checkAuth = async () => {
-    const response = await fetch('/api/auth/check-session', {
-      credentials: 'include'
-    });
-    const data = await response.json();
-    if (data.isAuthenticated) {
-      setUser(data.user);
-    } else {
+    try {
+      console.log('Checking auth with baseURL:', baseURL);
+      const response = await axios.get('/api/auth/check-session', {
+        withCredentials: true,
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      console.log('Check auth response:', response.data);
+      if (response.data.isAuthenticated) {
+        setUser(response.data.user);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Check auth error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       setUser(null);
     }
   };

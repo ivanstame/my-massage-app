@@ -3,8 +3,8 @@ import axios from 'axios';
 import { AuthContext } from '../AuthContext';
 import { Calendar, MapPin, Clock, AlertCircle, Phone, MessageSquare } from 'lucide-react';
 import { DateTime } from 'luxon';
-import { DEFAULT_TZ, TIME_FORMATS } from '../../shared/utils/timeConstants';
-import LuxonService from '../../shared/utils/LuxonService';
+import { DEFAULT_TZ, TIME_FORMATS } from '../utils/timeConstants';
+import LuxonService from '../utils/LuxonService';
 
 
 const BookingList = () => {
@@ -15,7 +15,6 @@ const BookingList = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useContext(AuthContext);
   const [provider, setProvider] = useState(null);
-  const [serviceArea, setServiceArea] = useState(null);
 
   useEffect(() => {
     const fetchProviderInfo = async () => {
@@ -23,7 +22,6 @@ const BookingList = () => {
         try {
           const response = await axios.get(`/api/users/provider/${user.providerId}`);
           setProvider(response.data);
-          setServiceArea(response.data.providerProfile.serviceArea);
         } catch (error) {
           console.error('Error fetching provider info:', error);
         }
@@ -33,25 +31,6 @@ const BookingList = () => {
     fetchProviderInfo();
     fetchBookings();
   }, [user]);
-
-  const isOutsideServiceArea = (location) => {
-    if (!serviceArea?.center || !location) return false;
-    
-    const R = 6371; // Earth's radius in km
-    const lat1 = serviceArea.center.lat * Math.PI / 180;
-    const lat2 = location.lat * Math.PI / 180;
-    const dLat = (location.lat - serviceArea.center.lat) * Math.PI / 180;
-    const dLon = (location.lng - serviceArea.center.lng) * Math.PI / 180;
-
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-             Math.cos(lat1) * Math.cos(lat2) * 
-             Math.sin(dLon/2) * Math.sin(dLon/2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-
-    return distance > serviceArea.radius;
-  };
 
   const fetchBookings = async () => {
     try {
@@ -197,12 +176,6 @@ const BookingList = () => {
               <div className="flex items-center text-slate-600">
                 <MapPin className="w-4 h-4 mr-2" />
                 <span>{booking.location?.address || 'Unknown'}</span>
-                {isOutsideServiceArea(booking.location) && (
-                  <span className="ml-2 text-amber-600 flex items-center">
-                    <AlertCircle className="w-4 h-4 mr-1" />
-                    Outside service area
-                  </span>
-                )}
               </div>
             </div>
           </div>

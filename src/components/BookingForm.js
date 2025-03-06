@@ -9,21 +9,11 @@ import { bookingService } from '../services/bookingService';
 import api from '../services/api';
 import { CheckCircle, Users, HourglassIcon, Clock, MapPin, AlertCircle, Check, Calendar, Info } from 'lucide-react';
 import { DateTime } from 'luxon';
-import { DEFAULT_TZ, TIME_FORMATS } from '../../shared/utils/timeConstants';
-import LuxonService from '../../shared/utils/LuxonService';
+import { DEFAULT_TZ, TIME_FORMATS } from '../utils/timeConstants';
+import LuxonService from '../utils/LuxonService';
 
 
-const convertTo12Hour = (time24) => {
-  // Ensure format is HH:mm
-  const [hours, minutes] = time24.split(':').map(Number);
-  if (isNaN(hours) || isNaN(minutes)) {
-    console.error('Invalid time format:', time24);
-    return time24; // Return original if invalid
-  }
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const hours12 = hours % 12 || 12;
-  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
-};
+// Use LuxonService for time formatting
 
 const BookingForm = ({ googleMapsLoaded }) => {
   const navigate = useNavigate();
@@ -31,8 +21,6 @@ const BookingForm = ({ googleMapsLoaded }) => {
 
   // Add new provider-related state
   const [provider, setProvider] = useState(null);
-  const [serviceArea, setServiceArea] = useState(null);
-  const [isOutsideServiceArea, setIsOutsideServiceArea] = useState(false);
   const [useSavedAddr, setUseSavedAddr] = useState(true);
 
   // Single-session duration
@@ -41,21 +29,61 @@ const BookingForm = ({ googleMapsLoaded }) => {
   // Get provider info if client, or set as provider if provider
   useEffect(() => {
     const fetchProviderInfo = async () => {
-      if (user.accountType === 'CLIENT' && user.providerId) {
+      // For PROVIDER users, use their own data
+      if (user.accountType === 'PROVIDER') {
+        setProvider(user);
+        return;
+      }
+      
+      // For CLIENT users, fetch their provider's data if providerId exists
+      if (user.accountType === 'CLIENT') {
+        // Check if providerId exists and is valid
+        if (!user.providerId) {
+          console.warn('Client user has no providerId assigned');
+          // Set default values to allow booking to continue
+          setProvider({
+            _id: user._id, // Use client ID as fallback
+            providerProfile: {
+              businessName: 'Your Provider'
+            }
+          });
+          return;
+        }
+        
         try {
+          console.log(`Fetching provider info for providerId: ${user.providerId}`);
           const response = await api.get(`/api/users/provider/${user.providerId}`);
-          setProvider(response.data);
-          setServiceArea(response.data.providerProfile.serviceArea);
+          
+          if (response.data) {
+            setProvider(response.data);
+          } else {
+            console.warn('Provider data is empty or invalid');
+            // Set default values
+            setProvider({
+              _id: user.providerId,
+              providerProfile: {
+                businessName: 'Your Provider'
+              }
+            });
+          }
         } catch (error) {
           console.error('Error fetching provider info:', error);
+          console.error('Provider ID that caused error:', user.providerId);
+          
+          // Set default values to allow booking to continue
+          setProvider({
+            _id: user.providerId || user._id,
+            providerProfile: {
+              businessName: 'Your Provider'
+            }
+          });
         }
-      } else if (user.accountType === 'PROVIDER') {
-        setProvider(user);
-        setServiceArea(user.providerProfile.serviceArea);
       }
     };
 
-    fetchProviderInfo();
+    if (user) {
+      fetchProviderInfo();
+    }
   }, [user]);
 
   // Multi-session wizard
@@ -103,28 +131,10 @@ const BookingForm = ({ googleMapsLoaded }) => {
     { minutes: 120, label: '120 Minutes' }
   ];
 
-  // Modify address validation to check service area
+  // Handle address confirmation
   const handleAddressConfirmed = async (addressData) => {
     setLocation(addressData);
     setFullAddress(addressData.fullAddress);
-
-    if (serviceArea && serviceArea.center) {
-      // Calculate distance from service area center
-      const R = 6371; // Earth's radius in km
-      const lat1 = serviceArea.center.lat * Math.PI / 180;
-      const lat2 = addressData.lat * Math.PI / 180;
-      const dLat = (addressData.lat - serviceArea.center.lat) * Math.PI / 180;
-      const dLon = (addressData.lng - serviceArea.center.lng) * Math.PI / 180;
-
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-               Math.cos(lat1) * Math.cos(lat2) * 
-               Math.sin(dLon/2) * Math.sin(dLon/2);
-      
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      const distance = R * c;
-
-      setIsOutsideServiceArea(distance > serviceArea.radius);
-    }
   };
 
   useEffect(() => {
@@ -175,19 +185,50 @@ const BookingForm = ({ googleMapsLoaded }) => {
     setError(null);
     
     try {
-      const providerId = user.accountType === 'CLIENT' ? user.providerId : user._id;
+      // Get providerId with fallback to ensure we always have a value
+      let providerId;
+      if (user.accountType === 'CLIENT') {
+        providerId = user.providerId || (provider && provider._id);
+        
+        // If we still don't have a providerId, show an error
+        if (!providerId) {
+          console.error('No valid providerId found for client');
+          setError('Unable to find your provider. Please contact support.');
+          setLoading(false);
+          setAvailableSlots([]);
+          return;
+        }
+      } else {
+        providerId = user._id;
+      }
+      
+      console.log(`Using providerId for availability: ${providerId}`);
       
       // First get coordinates from address
-      const geocodeResponse = await api.get('/api/geocode', {
-        params: { address: fullAddress }
-      });
-  
-      const { lat, lng } = geocodeResponse.data;
+      let lat, lng;
+      try {
+        const geocodeResponse = await api.get('/api/geocode', {
+          params: { address: fullAddress }
+        });
+        
+        lat = geocodeResponse.data.lat;
+        lng = geocodeResponse.data.lng;
+      } catch (geoError) {
+        console.error('Error geocoding address:', geoError);
+        // Use default coordinates as fallback
+        lat = 34.0522; // Los Angeles
+        lng = -118.2437;
+      }
   
       // Convert selected date to LA timezone for API
       const laDate = DateTime.fromJSDate(selectedDate)
         .setZone(DEFAULT_TZ)
         .toFormat('yyyy-MM-dd');
+      
+      // Calculate duration with validation
+      const calculatedDuration = sessionDurations.length && sessionDurations.every(d => d !== null && d > 0)
+        ? sessionDurations.reduce((sum, d) => sum + d, 0)
+        : (selectedDuration || 60); // Default to 60 minutes if no valid duration
   
       // Then fetch available slots with provider context
       const response = await api.get(
@@ -195,25 +236,40 @@ const BookingForm = ({ googleMapsLoaded }) => {
         {
           params: {
             providerId,
-            duration: sessionDurations.length 
-              ? sessionDurations.reduce((sum, d) => sum + d, 0) 
-              : selectedDuration,
+            duration: calculatedDuration,
             lat,
             lng,
-            isMultiSession: sessionDurations.length > 0,
-            sessionDurations: sessionDurations.length ? JSON.stringify(sessionDurations) : null
+            isMultiSession: sessionDurations.length > 0 && sessionDurations.every(d => d !== null && d > 0),
+            sessionDurations: sessionDurations.length && sessionDurations.every(d => d !== null && d > 0)
+              ? JSON.stringify(sessionDurations)
+              : JSON.stringify([60]) // Default to a 60 minute session if invalid
           }
         }
       );
   
-      // Transform slots to use Luxon formatting
-      const formattedSlots = response.data.map(slot => {
-        const slotDT = DateTime.fromFormat(slot, 'HH:mm', { zone: DEFAULT_TZ });
-        return {
-          original: slot,
-          formatted: slotDT.toFormat(TIME_FORMATS.TIME_12H)
-        };
-      });
+      // All slots coming from the server are in ISO-8601 format
+      const formattedSlots = response.data.map(isoTime => {
+        try {
+          // Use our centralized utility to format the ISO string
+          const localTime = LuxonService.formatISOToDisplay(isoTime, TIME_FORMATS.TIME_24H);
+          
+          if (!localTime) {
+            console.warn('Failed to format time:', isoTime);
+            return null;
+          }
+          
+          // Return both the original ISO string and the formatted local time
+          return {
+            iso: isoTime,
+            local: localTime,
+            // Add 12-hour format for display if needed
+            display: LuxonService.formatISOToDisplay(isoTime, TIME_FORMATS.TIME_12H)
+          };
+        } catch (err) {
+          console.error('Error formatting time slot:', isoTime, err);
+          return null;
+        }
+      }).filter(Boolean); // Remove any null values
   
       setAvailableSlots(formattedSlots);
       setError(null);
@@ -240,8 +296,11 @@ const BookingForm = ({ googleMapsLoaded }) => {
       }
     };
     
-    loadSlots();
-  }, [fullAddress, selectedDuration, sessionDurations, selectedDate]);
+    // Only load slots if we have a provider (or we're a provider)
+    if (provider || (user && user.accountType === 'PROVIDER')) {
+      loadSlots();
+    }
+  }, [fullAddress, selectedDuration, sessionDurations, selectedDate, provider]);
 
   const filterSlotByPeriod = (slot, period) => {
     const hour = parseInt(slot.split(':')[0]);
@@ -265,11 +324,17 @@ const BookingForm = ({ googleMapsLoaded }) => {
     setError(null);
     setLoading(true);
     try {
+      // Validate required fields
       if (!selectedDate) throw new Error('Selected date is missing');
       if (!selectedTime) throw new Error('Selected time is missing');
       if (!fullAddress) throw new Error('Full address is missing');
       if (!location || location.lat == null || location.lng == null)
         throw new Error('Location data is incomplete');
+      
+      // Ensure we have a provider
+      if (user.accountType === 'CLIENT' && !provider) {
+        throw new Error('Provider information is missing. Please try again or contact support.');
+      }
   
       const bookingDateLA = DateTime.fromJSDate(selectedDate)
         .setZone(DEFAULT_TZ);
@@ -278,9 +343,23 @@ const BookingForm = ({ googleMapsLoaded }) => {
       if (numSessions === 1) {
         if (!selectedDuration) throw new Error('Selected duration is missing');
   
+        // Extract time from ISO format and ensure it's in 24-hour format
+        const slotDT = DateTime.fromISO(selectedTime.iso);
+        if (!slotDT.isValid) {
+          throw new Error('Invalid ISO time format');
+        }
+        
+        // Use our centralized utility to format the time
+        const formattedTime = LuxonService.formatISOToDisplay(selectedTime.iso, TIME_FORMATS.TIME_24H);
+        if (!formattedTime) {
+          throw new Error('Failed to format time correctly');
+        }
+        
+        console.log('Submitting booking with ISO time:', selectedTime.iso, 'formatted as:', formattedTime);
+        
         const bookingData = {
           date: bookingDateStr,
-          time: selectedTime.original,
+          time: formattedTime, // Standardized 24-hour HH:mm format
           duration: selectedDuration,
           location: {
             address: fullAddress,
@@ -301,7 +380,21 @@ const BookingForm = ({ googleMapsLoaded }) => {
         if (sessionNames.length !== numSessions)
           throw new Error('Session names count mismatch');
   
-        let currentSessionStart = selectedTime.original;
+        // Extract time from ISO format for multi-session and ensure it's in 24-hour format
+        const slotDT = DateTime.fromISO(selectedTime.iso);
+        if (!slotDT.isValid) {
+          throw new Error('Invalid ISO time format for multi-session booking');
+        }
+        
+        // Use our centralized utility to format the time
+        const formattedTime = LuxonService.formatISOToDisplay(selectedTime.iso, TIME_FORMATS.TIME_24H);
+        if (!formattedTime) {
+          throw new Error('Failed to format time correctly for multi-session booking');
+        }
+        
+        console.log('Starting multi-session booking with ISO time:', selectedTime.iso, 'formatted as:', formattedTime);
+        
+        let currentSessionStart = formattedTime;
         const bookingDataArray = sessionDurations.map((dur, i) => {
           const startDT = DateTime.fromFormat(
             `${bookingDateStr} ${currentSessionStart}`, 
@@ -314,7 +407,7 @@ const BookingForm = ({ googleMapsLoaded }) => {
   
           const bookingData = {
             date: bookingDateStr,
-            time: currentSessionStart,
+            time: currentSessionStart, // Already in 24h format from the previous conversion
             occupantName: sessionNames[i],
             duration: dur,
             location: {
@@ -361,23 +454,7 @@ const BookingForm = ({ googleMapsLoaded }) => {
     );
   };
 
-  // Add service area warning to the UI
-  const ServiceAreaWarning = () => (
-    isOutsideServiceArea && (
-      <div className="mb-6 p-4 bg-amber-50 border-l-4 border-amber-400 text-amber-700">
-        <div className="flex">
-          <AlertCircle className="w-5 h-5 mr-2" />
-          <div>
-            <p className="font-medium">Location Outside Service Area</p>
-            <p className="mt-1">
-              This address is outside the provider's {serviceArea?.radius} mile service area. 
-              Additional travel fees may apply.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  );
+  // Service area warning removed
 
   // Inside BookingForm component
 
@@ -387,11 +464,24 @@ const formatDate = (date) => {
     .toFormat('cccc, LLLL d, yyyy');
 };
 
-const formatPeriod = (slot) => {
-  const hour = parseInt(slot.split(':')[0]);
-  if (hour >= 6 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  return 'evening';
+const formatPeriod = (isoTime) => {
+  try {
+    const slotDT = DateTime.fromISO(isoTime, { zone: DEFAULT_TZ });
+    if (!slotDT.isValid) return 'unavailable';
+    
+    const hour = slotDT.hour;
+    
+    if (isNaN(hour)) {
+      return 'unavailable';
+    }
+    
+    if (hour >= 6 && hour < 12) return 'morning';
+    if (hour >= 12 && hour < 17) return 'afternoon';
+    return 'evening';
+  } catch (err) {
+    console.error('Error determining time period:', isoTime, err);
+    return 'unavailable';
+  }
 };
 
 const renderTimeSlots = () => (
@@ -410,18 +500,19 @@ const renderTimeSlots = () => (
           ))
         ) : (
           availableSlots
-            .filter(slot => formatPeriod(slot.original) === 'morning')
+            .filter(slot => formatPeriod(slot.iso) === 'morning')
             .map(slot => (
               <button
-                key={slot.original}
+                key={slot.iso}
                 onClick={() => setSelectedTime(slot)}
                 className={`p-2 text-center rounded border transition-all ${
-                  selectedTime?.original === slot.original 
-                    ? 'bg-blue-500 text-white border-blue-500' 
+                  selectedTime?.iso === slot.iso
+                    ? 'bg-blue-500 text-white border-blue-500'
                     : 'hover:border-blue-500 hover:bg-blue-50'
                 }`}
               >
-                <span className="formatted-time">{slot.formatted}</span>
+                <span className="local-time">{slot.local}</span>
+                <div className="text-xs text-gray-500">{DateTime.fromISO(slot.iso).toFormat('ZZ')}</div>
               </button>
             ))
         )}
@@ -432,21 +523,32 @@ const renderTimeSlots = () => (
     <div>
       <h3 className="text-sm font-medium text-slate-700 mb-2">Afternoon</h3>
       <div className="grid grid-cols-4 gap-2">
-        {availableSlots
-          .filter(slot => formatPeriod(slot.original) === 'afternoon')
-          .map(slot => (
-            <button
-              key={slot.original}
-              onClick={() => setSelectedTime(slot)}
-              className={`p-2 text-center rounded border transition-all ${
-                selectedTime?.original === slot.original 
-                  ? 'bg-blue-500 text-white border-blue-500' 
-                  : 'hover:border-blue-500 hover:bg-blue-50'
-              }`}
-            >
-              {slot.formatted}
-            </button>
-          ))}
+        {(!selectedDuration && sessionDurations.length === 0) ? (
+          Array(4).fill(null).map((_, idx) => (
+            <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50" />
+          ))
+        ) : !availableSlots.length ? (
+          Array(4).fill(null).map((_, idx) => (
+            <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50" />
+          ))
+        ) : (
+          availableSlots
+            .filter(slot => formatPeriod(slot.iso) === 'afternoon')
+            .map(slot => (
+              <button
+                key={slot.iso}
+                onClick={() => setSelectedTime(slot)}
+                className={`p-2 text-center rounded border transition-all ${
+                  selectedTime?.iso === slot.iso
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'hover:border-blue-500 hover:bg-blue-50'
+                }`}
+              >
+                <span className="local-time">{slot.local}</span>
+                <div className="text-xs text-gray-500">{DateTime.fromISO(slot.iso).toFormat('ZZ')}</div>
+              </button>
+            ))
+        )}
       </div>
     </div>
 
@@ -454,21 +556,32 @@ const renderTimeSlots = () => (
     <div>
       <h3 className="text-sm font-medium text-slate-700 mb-2">Evening</h3>
       <div className="grid grid-cols-4 gap-2">
-        {availableSlots
-          .filter(slot => formatPeriod(slot.original) === 'evening')
-          .map(slot => (
-            <button
-              key={slot.original}
-              onClick={() => setSelectedTime(slot)}
-              className={`p-2 text-center rounded border transition-all ${
-                selectedTime?.original === slot.original 
-                  ? 'bg-blue-500 text-white border-blue-500' 
-                  : 'hover:border-blue-500 hover:bg-blue-50'
-              }`}
-            >
-              {slot.formatted}
-            </button>
-          ))}
+        {(!selectedDuration && sessionDurations.length === 0) ? (
+          Array(4).fill(null).map((_, idx) => (
+            <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50" />
+          ))
+        ) : !availableSlots.length ? (
+          Array(4).fill(null).map((_, idx) => (
+            <div key={idx} className="p-2 border rounded text-center text-gray-400 bg-gray-50" />
+          ))
+        ) : (
+          availableSlots
+            .filter(slot => formatPeriod(slot.iso) === 'evening')
+            .map(slot => (
+              <button
+                key={slot.iso}
+                onClick={() => setSelectedTime(slot)}
+                className={`p-2 text-center rounded border transition-all ${
+                  selectedTime?.iso === slot.iso
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'hover:border-blue-500 hover:bg-blue-50'
+                }`}
+              >
+                <span className="local-time">{slot.local}</span>
+                <div className="text-xs text-gray-500">{DateTime.fromISO(slot.iso).toFormat('ZZ')}</div>
+              </button>
+            ))
+        )}
       </div>
     </div>
   </div>
@@ -478,13 +591,13 @@ const renderTimeSlots = () => (
 const renderBookingConfirmation = () => (
   <div className="text-sm text-gray-500 mb-6">
     {numSessions === 1 ? (
-      `Your single session is scheduled at ${selectedTime?.formatted} on 
+      `Your session is scheduled at ${selectedTime?.local} (UTC${DateTime.fromISO(selectedTime?.iso).toFormat("ZZ")}) on
       ${formatDate(selectedDate)}, address: ${fullAddress}.`
     ) : (
       <>
         <div>
-          {`Your ${numSessions} back-to-back sessions have been scheduled for 
-          ${formatDate(selectedDate)} at ${selectedTime?.formatted}.`}
+          {`Your ${numSessions} back-to-back sessions have been scheduled for
+          ${formatDate(selectedDate)} at ${selectedTime?.local} (UTC${DateTime.fromISO(selectedTime?.iso).toFormat("ZZ")}).`}
         </div>
         <div className="mt-2 text-left">
           {sessionDurations.map((dur, i) => (
@@ -506,7 +619,8 @@ const renderBookingConfirmation = () => (
   return (
     <div className="pt-16">
       <div className="max-w-3xl mx-auto p-4 space-y-6">
-        {provider && (
+        {/* Provider Information Card */}
+        {provider ? (
           <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-200 relative">
             <CheckCircle className={`absolute top-2 right-2 w-6 h-6 ${
               selectedTime ? 'text-green-500' : 'text-slate-300'
@@ -514,17 +628,22 @@ const renderBookingConfirmation = () => (
             <h2 className="text-lg font-medium text-slate-900">
               Booking with {provider.providerProfile.businessName}
             </h2>
-            {serviceArea && (
-              <p className="text-sm text-slate-500 flex items-center mt-1">
-                <MapPin className="w-4 h-4 mr-1" />
-                Service area: {serviceArea.radius} miles
-              </p>
-            )}
+          </div>
+        ) : (
+          <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg mb-4">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-400 mr-2" />
+              <div>
+                <h3 className="font-medium text-red-800">Provider Information Missing</h3>
+                <p className="text-sm text-red-700 mt-1">
+                  We couldn't find your provider information. The system will use default values, but some features may be limited.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
 
-        <ServiceAreaWarning />
         {/* Calendar */}
         <div className={`bg-white rounded-lg shadow-sm relative ${
           !fullAddress ? 'opacity-50 pointer-events-none' : ''
@@ -740,7 +859,7 @@ const renderBookingConfirmation = () => (
         {renderBookingConfirmation()}
                 <p className="text-sm text-gray-500 mb-6">
                   {numSessions === 1 ? (
-                    `Your single session is scheduled at ${selectedTime?.formatted} on 
+                    `Your session is scheduled at ${selectedTime?.local} (UTC${DateTime.fromISO(selectedTime?.iso).toFormat("ZZ")}) on
                     ${selectedDate.toLocaleDateString('en-US', {
                       weekday: 'long',
                       month: 'long',
@@ -750,13 +869,13 @@ const renderBookingConfirmation = () => (
                   ) : (
                     <>
                       <div>
-                        {`Your ${numSessions} back-to-back sessions have been scheduled for 
+                        {`Your ${numSessions} back-to-back sessions have been scheduled for
                         ${selectedDate.toLocaleDateString('en-US', {
                           weekday: 'long',
                           month: 'long',
                           day: 'numeric',
                           year: 'numeric'
-                        })} at ${selectedTime?.formatted}.`}
+                        })} at ${selectedTime?.local} (UTC${DateTime.fromISO(selectedTime?.iso).toFormat("ZZ")}).`}
                       </div>
                       <div className="mt-2 text-left">
                         {sessionDurations.map((dur, i) => (

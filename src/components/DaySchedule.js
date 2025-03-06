@@ -1,10 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DateTime } from 'luxon';
-import { DEFAULT_TZ, TIME_FORMATS } from '../../shared/utils/timeConstants';
-import LuxonService from '../../shared/utils/LuxonService';
+import { DEFAULT_TZ, TIME_FORMATS } from '../utils/timeConstants';
+import LuxonService from '../utils/LuxonService';
 
-const DaySchedule = ({ date, availabilityBlocks, bookings, onModify, serviceArea }) => {
+const DaySchedule = ({ date, availabilityBlocks, bookings, onModify }) => {
   const navigate = useNavigate();
   const startHour = 7;
   const endHour = 23;
@@ -14,18 +14,38 @@ const DaySchedule = ({ date, availabilityBlocks, bookings, onModify, serviceArea
     navigate(`/appointments/${bookingId}`);
   };
 
-  const timeToPixels = (timeStr) => {
-    const [hours, minutes] = timeStr.split(':').map(Number);
+  const timeToPixels = (timeValue) => {
+    let formattedTime;
+    if (typeof timeValue === 'string' && timeValue.includes('T')) {
+      formattedTime = DateTime.fromISO(timeValue).setZone(DEFAULT_TZ).toFormat("HH:mm");
+    } else if (typeof timeValue === 'string') {
+      formattedTime = timeValue;
+    } else if (timeValue instanceof Date) {
+      formattedTime = DateTime.fromJSDate(timeValue).setZone(DEFAULT_TZ).toFormat("HH:mm");
+    } else {
+      return 0;
+    }
+    const [hours, minutes] = formattedTime.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return 0;
     return ((hours - startHour) * 60 + minutes) * 2;
   };
 
-  const formatTime = (timeStr) => {
-    // Create a DateTime object at current date with given time in LA timezone
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    return DateTime.now()
-      .setZone(DEFAULT_TZ)
-      .set({ hour: hours, minute: minutes })
-      .toFormat('h:mm a');
+  const formatTime = (timeValue) => {
+    let dt;
+    if (timeValue instanceof Date) {
+      dt = DateTime.fromJSDate(timeValue).setZone(DEFAULT_TZ);
+    } else if (typeof timeValue === 'string') {
+      if (timeValue.includes('T')) {
+        dt = DateTime.fromISO(timeValue).setZone(DEFAULT_TZ);
+      } else {
+        const [hours, minutes] = timeValue.split(':').map(Number);
+        if (isNaN(hours) || isNaN(minutes)) return "";
+        dt = DateTime.now().setZone(DEFAULT_TZ).set({ hour: hours, minute: minutes });
+      }
+    } else {
+      return "";
+    }
+    return dt.toFormat('h:mm a');
   };
 
   // Hour marker component
@@ -72,91 +92,92 @@ const DaySchedule = ({ date, availabilityBlocks, bookings, onModify, serviceArea
         </h2>
       </div>
 
-      {/* Schedule grid */}
-      <div className="relative h-[1920px] mx-4 mt-4">
-        {/* Time markers and grid lines */}
-        <div className="absolute top-0 left-0 w-full h-full">
-          {Array.from({ length: totalHours + 1 }).map((_, i) => (
-            <React.Fragment key={i}>
-              <HourMarker hour={startHour + i} />
-              <HourGridLine hour={startHour + i} />
-              <HalfHourMarker hour={startHour + i} />
-            </React.Fragment>
-          ))}
-        </div>
+      {/* Scrollable container for schedule grid */}
+      <div className="overflow-y-auto" style={{ height: "500px" }}>
+        {/* Schedule grid */}
+        <div className="relative h-[1920px] mx-4 mt-4">
+          {/* Time markers and grid lines */}
+          <div className="absolute top-0 left-0 w-full h-full">
+            {Array.from({ length: totalHours + 1 }).map((_, i) => (
+              <React.Fragment key={i}>
+                <HourMarker hour={startHour + i} />
+                <HourGridLine hour={startHour + i} />
+                <HalfHourMarker hour={startHour + i} />
+              </React.Fragment>
+            ))}
+          </div>
 
-        {/* Content area */}
-        <div className="absolute left-16 right-0 top-0 bottom-0">
-          {/* Availability blocks */}
-          {availabilityBlocks.map((block, index) => {
-            // Convert block times to LA timezone for display
-            const blockStart = timeToPixels(block.start);
-            const blockEnd = timeToPixels(block.end);
+          {/* Content area */}
+          <div className="absolute left-16 right-0 top-0 bottom-0">
+            {/* Availability blocks */}
+            {availabilityBlocks.map((block, index) => {
+              // Convert block times to LA timezone for display
+              const blockStart = timeToPixels(block.start);
+              const blockEnd = timeToPixels(block.end);
 
-            return (
-              <div
-                key={`availability-${index}`}
-                className={`absolute left-0 right-0 
-                  ${block.type === 'autobook' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} 
-                  border rounded-md transition-all duration-200 hover:shadow-md`}
-                style={{
-                  top: `${blockStart}px`,
-                  height: `${blockEnd - blockStart}px`,
-                }}
-              >
-                <div className="p-2 flex flex-col h-full justify-between">
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm font-medium text-slate-700">
-                      {`${formatTime(block.start)} - ${formatTime(block.end)}`}
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded-full 
-                      ${block.type === 'autobook' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {block.type}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Bookings */}
-          {bookings.map((booking, index) => {
-            const bookingStart = timeToPixels(booking.startTime);
-            const bookingEnd = timeToPixels(booking.endTime);
-            
-            return (
-              <div
-                key={`booking-${index}`}
-                onClick={() => handleAppointmentClick(booking._id)}
-                className="absolute left-1 right-1 bg-blue-50 border border-blue-200 
-                  rounded-md shadow-sm cursor-pointer transition-all duration-200 
-                  hover:shadow-md hover:bg-blue-100 z-20"
-                style={{
-                  top: `${bookingStart}px`,
-                  height: `${bookingEnd - bookingStart}px`,
-                }}
-              >
-                <div className="p-2 flex flex-col h-full justify-between">
-                  <div className="space-y-1">
+              return (
+                <div
+                  key={`availability-${index}`}
+                  className="absolute left-0 right-0 bg-green-50 border-green-200 
+                    border rounded-md transition-all duration-200 hover:shadow-md"
+                  style={{
+                    top: `${blockStart}px`,
+                    height: `${blockEnd - blockStart}px`,
+                  }}
+                >
+                  <div className="p-2 flex flex-col h-full justify-between">
                     <div className="flex justify-between items-start">
                       <span className="text-sm font-medium text-slate-700">
-                        {`${formatTime(booking.startTime)} - ${formatTime(booking.endTime)}`}
+                        {`${formatTime(block.start)} - ${formatTime(block.end)}`}
                       </span>
-                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                        {`${booking.duration} min`}
+                      <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
+                        Available
                       </span>
                     </div>
-                    <p className="text-sm font-medium text-slate-700">
-                      {booking.client.profile?.fullName || booking.client.email}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {booking.location.address}
-                    </p>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+
+            {/* Bookings */}
+            {bookings.map((booking, index) => {
+              const bookingStart = timeToPixels(booking.startTime);
+              const bookingEnd = timeToPixels(booking.endTime);
+              
+              return (
+                <div
+                  key={`booking-${index}`}
+                  onClick={() => handleAppointmentClick(booking._id)}
+                  className="absolute left-1 right-1 bg-blue-50 border border-blue-200 
+                    rounded-md shadow-sm cursor-pointer transition-all duration-200 
+                    hover:shadow-md hover:bg-blue-100 z-20"
+                  style={{
+                    top: `${bookingStart}px`,
+                    height: `${bookingEnd - bookingStart}px`,
+                  }}
+                >
+                  <div className="p-2 flex flex-col h-full justify-between">
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-start">
+                        <span className="text-sm font-medium text-slate-700">
+                          {`${formatTime(booking.startTime)} - ${formatTime(booking.endTime)}`}
+                        </span>
+                        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                          {`${booking.duration} min`}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-700">
+                        {booking.client.profile?.fullName || booking.client.email}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {booking.location.address}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

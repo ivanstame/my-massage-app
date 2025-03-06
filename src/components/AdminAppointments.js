@@ -2,8 +2,8 @@ import React, { useEffect, useState, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../AuthContext';
 import { DateTime } from 'luxon';
-import { DEFAULT_TZ, TIME_FORMATS } from '../../shared/utils/timeConstants';
-import LuxonService from '../../shared/utils/LuxonService';
+import { DEFAULT_TZ, TIME_FORMATS } from '../utils/timeConstants';
+import LuxonService from '../utils/LuxonService';
 
 
 const AdminAppointments = () => {

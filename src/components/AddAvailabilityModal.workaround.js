@@ -3,10 +3,17 @@ import { Clock, AlertCircle } from 'lucide-react';
 import { DateTime } from 'luxon';
 import { DEFAULT_TZ, TIME_FORMATS } from '../utils/timeConstants';
 
+// Import the workaround function
+// Note: In a real implementation, you would need to properly import this
+// This is just a placeholder to show how it would be used
+// const { addAvailabilityDirect } = require('../../add-availability-workaround');
+
 const AddAvailabilityModal = ({ date, onAdd, onClose }) => {
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
+  const [type, setType] = useState('autobook');
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const generateTimeOptions = () => {
     const slots = [];
@@ -24,9 +31,10 @@ const AddAvailabilityModal = ({ date, onAdd, onClose }) => {
     return slots;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
 
     const dateLA = DateTime.fromJSDate(date).setZone(DEFAULT_TZ);
     
@@ -37,21 +45,36 @@ const AddAvailabilityModal = ({ date, onAdd, onClose }) => {
     // Validate times
     if (!startDateTime.isValid || !endDateTime.isValid) {
       setError('Invalid time format');
+      setLoading(false);
       return;
     }
 
     if (endDateTime <= startDateTime) {
       setError('End time must be after start time');
+      setLoading(false);
       return;
     }
 
     const availability = {
       date: dateLA.toFormat('yyyy-MM-dd'),
       start: startTime,
-      end: endTime
+      end: endTime,
+      type
     };
 
-    onAdd(availability);
+    try {
+      // WORKAROUND: Instead of using the API, we would use the direct database access
+      // In a real implementation, you would need to properly call this function
+      // const result = await addAvailabilityDirect(availability, userId);
+      
+      // For now, we'll just pass the availability to the onAdd function
+      onAdd(availability);
+    } catch (err) {
+      console.error('Error adding availability:', err);
+      setError(err.message || 'Failed to add availability');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -99,12 +122,28 @@ const AddAvailabilityModal = ({ date, onAdd, onClose }) => {
             </select>
           </div>
 
+          <div>
+            <label htmlFor="type" className="block text-sm font-medium text-slate-700 mb-1">
+              Availability Type
+            </label>
+            <select
+              id="type"
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full border rounded-md p-2 focus:ring-[#387c7e] focus:border-[#387c7e]"
+            >
+              <option value="autobook">Auto-book (Clients can book directly)</option>
+              <option value="unavailable">Unavailable (Blocked time)</option>
+            </select>
+          </div>
+
           <div className="flex justify-end space-x-3 pt-4">
             <button
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-md 
                 transition-colors"
+              disabled={loading}
             >
               Cancel
             </button>
@@ -112,8 +151,9 @@ const AddAvailabilityModal = ({ date, onAdd, onClose }) => {
               type="submit"
               className="px-4 py-2 bg-[#387c7e] text-white rounded-md hover:bg-[#2c5f60] 
                 transition-colors"
+              disabled={loading}
             >
-              Add Block
+              {loading ? 'Adding...' : 'Add Block'}
             </button>
           </div>
         </form>

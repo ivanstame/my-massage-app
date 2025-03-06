@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Direct Access Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #387c7e;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #387c7e;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #2c5f60;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: #f9f9f9;
+    }
+    .error {
+      color: red;
+    }
+    .success {
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <h1>Direct Access Test</h1>
+  <p>This form allows you to test the direct access route for adding availability.</p>
+  
+  <form id="directAccessForm">
+    <div class="form-group">
+      <label for="date">Date:</label>
+      <input type="date" id="date" name="date" required>
+    </div>
+    
+    <div class="form-group">
+      <label for="start">Start Time:</label>
+      <input type="time" id="start" name="start" required>
+    </div>
+    
+    <div class="form-group">
+      <label for="end">End Time:</label>
+      <input type="time" id="end" name="end" required>
+    </div>
+    
+    <div class="form-group">
+      <label for="type">Type:</label>
+      <select id="type" name="type" required>
+        <option value="autobook">Auto-book (Clients can book directly)</option>
+        <option value="unavailable">Unavailable (Blocked time)</option>
+      </select>
+    </div>
+    
+    <button type="submit">Add Availability</button>
+  </form>
+  
+  <div id="result" class="result" style="display: none;"></div>
+  
+  <script>
+    document.getElementById('directAccessForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const date = document.getElementById('date').value;
+      const start = document.getElementById('start').value;
+      const end = document.getElementById('end').value;
+      const type = document.getElementById('type').value;
+      
+      const availabilityData = {
+        date,
+        start,
+        end,
+        type
+      };
+      
+      const resultDiv = document.getElementById('result');
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = 'Sending request...';
+      
+      try {
+        const response = await fetch('/api/add-availability-direct', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ availabilityData }),
+          credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          resultDiv.innerHTML = `
+            <p class="success">Availability created successfully!</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        } else {
+          resultDiv.innerHTML = `
+            <p class="error">Error: ${data.message}</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          `;
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <p class="error">Error: ${error.message}</p>
+        `;
+      }
+    });
+    
+    // Set default date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    document.getElementById('date').value = tomorrow.toISOString().split('T')[0];
+    
+    // Set default times
+    document.getElementById('start').value = '09:00';
+    document.getElementById('end').value = '17:00';
+  </script>
+</body>
+</html>

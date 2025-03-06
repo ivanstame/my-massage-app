@@ -1,7 +1,7 @@
 // middleware/validation.js
 const { DateTime } = require('luxon');
-const { DEFAULT_TZ, TIME_FORMATS } = require('../../shared/utils/timeConstants');
-const LuxonService = require('../../shared/utils/LuxonService');
+const { DEFAULT_TZ, TIME_FORMATS } = require('../../src/utils/timeConstants');
+const LuxonService = require('../../src/utils/LuxonService');
 
 const validateTimeFormat = (timeStr) => {
   return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr);
@@ -85,57 +85,107 @@ const validateBookingInput = (req, res, next) => {
 
 const validateAvailabilityInput = (req, res, next) => {
   try {
-    const { date, start, end, type } = req.body;
+    console.log('validateAvailabilityInput - Method:', req.method);
+    console.log('validateAvailabilityInput - Body:', JSON.stringify(req.body, null, 2));
+    console.log('validateAvailabilityInput - Params:', JSON.stringify(req.params, null, 2));
+    
+    if (req.method === 'GET') {
+      const { date } = req.params;
+      const availabilityDate = DateTime.fromISO(date, { zone: DEFAULT_TZ });
+      if (!availabilityDate.isValid) {
+        console.log('validateAvailabilityInput - Invalid date format for GET:', date);
+        return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
+      }
+      req.availabilityDate = availabilityDate;
+      return next();
+    }
+    
+    // Handle case where req.body might be a string (stringified JSON)
+    let availabilityData = req.body;
+    if (typeof req.body === 'string') {
+      try {
+        availabilityData = JSON.parse(req.body);
+        console.log('validateAvailabilityInput - Parsed string body:', availabilityData);
+        // Update req.body to use the parsed object for downstream handlers
+        req.body = availabilityData;
+      } catch (error) {
+        console.error('validateAvailabilityInput - Error parsing string body:', error);
+        return res.status(400).json({ message: 'Invalid JSON format' });
+      }
+    }
+    
+    const { date, start, end } = availabilityData;
+    console.log('validateAvailabilityInput - Extracted values:', { date, start, end });
+    
     const errors = [];
-
-    // Validate date format
-    const availabilityDate = DateTime.fromISO(date, { zone: DEFAULT_TZ });
-    if (!availabilityDate.isValid) {
-      errors.push('Invalid date format. Use YYYY-MM-DD');
-    }
-
-    // Validate time formats
-    if (!validateTimeFormat(start)) {
-      errors.push('Invalid start time format. Use HH:MM');
-    }
-    if (!validateTimeFormat(end)) {
-      errors.push('Invalid end time format. Use HH:MM');
-    }
-
-    // Validate type
-    if (!['autobook', 'unavailable'].includes(type)) {
-      errors.push('Invalid availability type');
-    }
-
-    // Validate times are in the same day
-    if (start && end) {
-      const startDT = DateTime.fromFormat(`${date} ${start}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
-      const endDT = DateTime.fromFormat(`${date} ${end}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
-
-      if (!startDT.hasSame(endDT, 'day')) {
-        errors.push('Start and end times must be within the same day');
-      }
-
-      if (endDT <= startDT) {
-        errors.push('End time must be after start time');
-      }
-    }
-
+    // Validate required fields are present
+    if (!date) errors.push('Date is required');
+    if (!start) errors.push('Start time is required');
+    if (!end) errors.push('End time is required');
+    
+    // If any required fields are missing, return early
     if (errors.length > 0) {
+      console.log('validateAvailabilityInput - Missing required fields:', errors);
       return res.status(400).json({
         success: false,
         errors: errors
       });
     }
-
+    
+    // Validate date format
+    const availabilityDate = DateTime.fromISO(date, { zone: DEFAULT_TZ });
+    if (!availabilityDate.isValid) {
+      console.log('validateAvailabilityInput - Invalid date format:', date);
+      errors.push('Invalid date format. Use YYYY-MM-DD');
+    }
+    // Validate time formats
+    if (!validateTimeFormat(start)) {
+      console.log('validateAvailabilityInput - Invalid start time format:', start);
+      errors.push('Invalid start time format. Use HH:MM');
+    }
+    if (!validateTimeFormat(end)) {
+      console.log('validateAvailabilityInput - Invalid end time format:', end);
+      errors.push('Invalid end time format. Use HH:MM');
+    }
+    // Validate times are in the same day
+    if (start && end && date && validateTimeFormat(start) && validateTimeFormat(end)) {
+      const startDT = DateTime.fromFormat(`${date} ${start}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
+      const endDT = DateTime.fromFormat(`${date} ${end}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
+      if (!startDT.isValid || !endDT.isValid) {
+        console.log('validateAvailabilityInput - Invalid datetime combination:', { date, start, end });
+        errors.push('Invalid date/time combination');
+      } else {
+        if (!startDT.hasSame(endDT, 'day')) {
+          console.log('validateAvailabilityInput - Times not in same day:', { startDT, endDT });
+          errors.push('Start and end times must be within the same day');
+        }
+        if (endDT <= startDT) {
+          console.log('validateAvailabilityInput - End time not after start time:', { startDT, endDT });
+          errors.push('End time must be after start time');
+        }
+      }
+    }
+    
+    if (errors.length > 0) {
+      console.log('validateAvailabilityInput - Validation errors:', errors);
+      return res.status(400).json({
+        success: false,
+        errors: errors
+      });
+    }
+    
     // Add validated date to request
     req.availabilityDate = availabilityDate;
+    console.log('validateAvailabilityInput - Validation successful');
     next();
   } catch (error) {
     console.error('Validation error:', error);
+    console.error('Validation error stack:', error.stack);
+    console.error('Request body:', req.body);
     res.status(400).json({
       success: false,
-      errors: ['Invalid availability data']
+      errors: ['Invalid availability data'],
+      details: error.message
     });
   }
 };

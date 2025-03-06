@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../AuthContext';
 import { 
   Users, Mail, UserPlus, AlertCircle, CheckCircle, 
@@ -8,13 +9,13 @@ import axios from 'axios';
 
 const ProviderClients = () => {
   const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteStatus, setInviteStatus] = useState(null);
-  const [serviceArea, setServiceArea] = useState(null);
 
   useEffect(() => {
     if (user?.accountType !== 'PROVIDER') {
@@ -22,9 +23,8 @@ const ProviderClients = () => {
       return;
     }
     
-    setServiceArea(user.providerProfile?.serviceArea);
     fetchClients();
-  }, [user]);
+  }, [user, navigate]);
 
   const fetchClients = async () => {
     try {
@@ -61,29 +61,6 @@ const ProviderClients = () => {
     }
   };
 
-  const isClientOutsideServiceArea = (client) => {
-    if (!serviceArea?.center || !client.profile?.address) return false;
-    
-    const location = {
-      lat: client.profile.address.lat,
-      lng: client.profile.address.lng
-    };
-
-    const R = 6371;
-    const lat1 = serviceArea.center.lat * Math.PI / 180;
-    const lat2 = location.lat * Math.PI / 180;
-    const dLat = (location.lat - serviceArea.center.lat) * Math.PI / 180;
-    const dLon = (location.lng - serviceArea.center.lng) * Math.PI / 180;
-
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-             Math.cos(lat1) * Math.cos(lat2) * 
-             Math.sin(dLon/2) * Math.sin(dLon/2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-
-    return distance > serviceArea.radius;
-  };
 
   const InviteModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -197,12 +174,6 @@ const ProviderClients = () => {
                           <div className="flex items-center text-slate-500">
                             <MapPin className="w-4 h-4 mr-2" />
                             {client.profile.address.formatted}
-                            {isClientOutsideServiceArea(client) && (
-                              <span className="ml-2 text-amber-600 flex items-center">
-                                <AlertCircle className="w-4 h-4 mr-1" />
-                                Outside service area
-                              </span>
-                            )}
                           </div>
                         )}
                       </div>

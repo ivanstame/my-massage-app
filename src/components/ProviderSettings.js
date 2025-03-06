@@ -10,13 +10,6 @@ const ProviderSettings = () => {
   const [successMessage, setSuccessMessage] = useState(null);
   const [settings, setSettings] = useState({
     businessName: '',
-    serviceArea: {
-      radius: 25,
-      center: {
-        lat: null,
-        lng: null
-      }
-    },
     scheduling: {
       defaultDuration: 60,
       bufferTime: 15,
@@ -37,7 +30,6 @@ const ProviderSettings = () => {
       setSettings({
         ...settings,
         businessName: user.providerProfile.businessName || '',
-        serviceArea: user.providerProfile.serviceArea || settings.serviceArea,
         scheduling: user.providerProfile.scheduling || settings.scheduling,
         services: user.providerProfile.services || [],
         pricing: user.providerProfile.pricing || settings.pricing
@@ -64,45 +56,6 @@ const ProviderSettings = () => {
     }
   };
 
-  const ServiceAreaSettings = () => (
-    <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <MapPin className="w-5 h-5 text-[#387c7e]" />
-        <h3 className="font-medium text-slate-900">Service Area</h3>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Service Radius (miles)
-          </label>
-          <input
-            type="range"
-            min="5"
-            max="100"
-            value={settings.serviceArea.radius}
-            onChange={(e) => setSettings(prev => ({
-              ...prev,
-              serviceArea: {
-                ...prev.serviceArea,
-                radius: parseInt(e.target.value)
-              }
-            }))}
-            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-          />
-          <div className="flex justify-between text-sm text-slate-600">
-            <span>5 miles</span>
-            <span>{settings.serviceArea.radius} miles</span>
-            <span>100 miles</span>
-          </div>
-        </div>
-
-        <div className="text-sm text-slate-500">
-          Your service area will be calculated from your business address
-        </div>
-      </div>
-    </div>
-  );
 
   const SchedulingSettings = () => (
     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
@@ -280,7 +233,7 @@ const ProviderSettings = () => {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Provider Settings</h1>
             <p className="text-sm text-slate-500 mt-1">
-              Manage your business preferences and service area
+              Manage your business preferences
             </p>
           </div>
         </div>
@@ -304,7 +257,6 @@ const ProviderSettings = () => {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ServiceAreaSettings />
           <SchedulingSettings />
           <ServicesSettings />
           <PricingSettings />

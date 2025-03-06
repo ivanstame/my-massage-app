@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { DateTime } = require('luxon');
-const { DEFAULT_TZ, TIME_FORMATS } = require('../../shared/utils/timeConstants');
-const LuxonService = require('../../shared/utils/LuxonService');
+const { DEFAULT_TZ, TIME_FORMATS } = require('../../src/utils/timeConstants');
+const LuxonService = require('../../src/utils/LuxonService');
 
 const AvailabilitySchema = new mongoose.Schema({
   provider: {
@@ -12,46 +12,40 @@ const AvailabilitySchema = new mongoose.Schema({
   // Store both UTC and localDate for querying efficiency
   date: { type: Date, required: true },          // UTC date
   localDate: { type: String, required: true },   // LA date string (YYYY-MM-DD)
-  start: { type: String, required: true },       // Local time (HH:mm)
-  end: { type: String, required: true },         // Local time (HH:mm)
-  type: { 
-    type: String, 
-    enum: ['autobook', 'unavailable'], 
-    required: true 
-  },
+  start: { type: Date, required: true },         // UTC timestamp
+  end: { type: Date, required: true },           // UTC timestamp
   availableSlots: [{ type: String }] // Cached 30-minute slots in local time
 });
 
 // Pre-save middleware to handle timezone conversion
 AvailabilitySchema.pre('save', function(next) {
   try {
-    // Convert date string to LA DateTime
-    const laDateTime = DateTime.fromJSDate(this.date, { zone: DEFAULT_TZ })
-      .startOf('day');
+    // Convert UTC timestamps to LA DateTime for validation
+    const startDT = DateTime.fromJSDate(this.start, { zone: 'UTC' }).setZone(DEFAULT_TZ);
+    const endDT = DateTime.fromJSDate(this.end, { zone: 'UTC' }).setZone(DEFAULT_TZ);
     
-    // Set both date fields
-    this.localDate = laDateTime.toFormat(TIME_FORMATS.ISO_DATE);
-    this.date = laDateTime.toUTC().toJSDate();
+    // Validate times are within same LA day
+    if (!startDT.hasSame(endDT, 'day')) {
+      throw new Error('Start and end times must be within the same day');
+    }
 
-    // Validate start and end times are within the same day
-    const startDT = DateTime.fromFormat(`${this.localDate} ${this.start}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
-    const endDT = DateTime.fromFormat(`${this.localDate} ${this.end}`, 'yyyy-MM-dd HH:mm', { zone: DEFAULT_TZ });
+    // Set derived date fields
+    this.localDate = startDT.toFormat(TIME_FORMATS.ISO_DATE);
+    this.date = startDT.startOf('day').toUTC().toJSDate();
     
     if (!startDT.hasSame(endDT, 'day')) {
       throw new Error('Start and end times must be within the same day');
     }
 
-    // If this is an autobook block, generate available slots
-    if (this.type === 'autobook') {
-      const slots = LuxonService.generateTimeSlots(
-        startDT.toISO(),
-        endDT.toISO(),
-        30 // 30-minute intervals
-      );
-      this.availableSlots = slots.map(slot => slot.localStart);
-    } else {
-      this.availableSlots = [];
-    }
+  // Generate available slots
+  const slots = LuxonService.generateTimeSlots(
+    startDT.toISO(),
+    endDT.toISO(),
+    30 // 30-minute intervals
+  );
+  this.availableSlots = slots.map(slot =>
+    DateTime.fromISO(slot.start).setZone(DEFAULT_TZ).toFormat(TIME_FORMATS.TIME_24H)
+  );
 
     next();
   } catch (error) {

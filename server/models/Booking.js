@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { DateTime } = require('luxon');
-const { DEFAULT_TZ, TIME_FORMATS } = require('../../shared/utils/timeConstants');
-const LuxonService = require('../../shared/utils/LuxonService');
+const { DEFAULT_TZ, TIME_FORMATS } = require('../../src/utils/timeConstants');
+const LuxonService = require('../../src/utils/LuxonService');
 
 const LocationSchema = new mongoose.Schema({
   lat: {
@@ -150,8 +150,8 @@ BookingSchema.statics.findOverlapping = async function(startTimeStr, endTimeStr,
   });
 };
 
-// Find bookings for a specific provider
-BookingSchema.statics.findForProvider = async function(providerId, startDate, endDate) {
+// Find bookings for a specific provider (returns query object)
+BookingSchema.statics.findForProvider = function(providerId, startDate, endDate) {
   const startLA = DateTime.fromJSDate(startDate, { zone: DEFAULT_TZ }).startOf('day');
   const endLA = DateTime.fromJSDate(endDate, { zone: DEFAULT_TZ }).endOf('day');
 

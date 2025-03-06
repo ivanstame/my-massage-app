@@ -71,6 +71,29 @@ router.put('/profile', ensureAuthenticated, async (req, res) => {
   }
 });
 
+// Get specific client details
+router.get('/provider/clients/:clientId', ensureAuthenticated, async (req, res) => {
+  try {
+    if (req.user.accountType !== 'PROVIDER') {
+      return res.status(403).json({ message: 'Provider access required' });
+    }
+
+    const client = await User.findOne({
+      _id: req.params.clientId,
+      providerId: req.user._id
+    });
+
+    if (!client) {
+      return res.status(404).json({ message: 'Client not found' });
+    }
+
+    res.json(client.getPublicProfile());
+  } catch (error) {
+    console.error('Error fetching client details:', error);
+    res.status(500).json({ message: 'Error fetching client details' });
+  }
+});
+
 // Get provider's clients
 router.get('/provider/clients', ensureAuthenticated, async (req, res) => {
   try {
@@ -131,6 +154,55 @@ router.post('/provider/invite', ensureAuthenticated, async (req, res) => {
   }
 });
 
+// Update client notes
+router.patch('/provider/clients/:clientId/notes', ensureAuthenticated, async (req, res) => {
+  try {
+    if (req.user.accountType !== 'PROVIDER') {
+      return res.status(403).json({ message: 'Provider access required' });
+    }
+
+    const { notes } = req.body;
+    if (typeof notes !== 'string') {
+      return res.status(400).json({ message: 'Notes must be a string' });
+    }
+
+    const client = await User.findOne({
+      _id: req.params.clientId,
+      providerId: req.user._id
+    });
+
+    if (!client) {
+      return res.status(404).json({ message: 'Client not found' });
+    }
+
+    // Initialize clientProfile if it doesn't exist
+    if (!client.clientProfile) {
+      client.clientProfile = {
+        notes: '',
+        preferences: {},
+        stats: {
+          totalAppointments: 0,
+          upcomingAppointments: 0,
+          completedAppointments: 0,
+          totalRevenue: 0
+        }
+      };
+    }
+
+    // Update the notes
+    client.clientProfile.notes = notes;
+    await client.save();
+
+    res.json({
+      message: 'Client notes updated successfully',
+      notes: client.clientProfile.notes
+    });
+  } catch (error) {
+    console.error('Error updating client notes:', error);
+    res.status(500).json({ message: 'Error updating client notes' });
+  }
+});
+
 // Remove client from provider
 router.delete('/provider/clients/:clientId', ensureAuthenticated, async (req, res) => {
   try {
@@ -186,20 +258,39 @@ router.put('/provider/settings', ensureAuthenticated, async (req, res) => {
 // Get provider public profile
 router.get('/provider/:providerId/profile', async (req, res) => {
   try {
+    console.log('Fetching provider profile for providerId:', req.params.providerId);
+    
     const provider = await User.findOne({
       _id: req.params.providerId,
       accountType: 'PROVIDER'
     }).select('providerProfile email');
 
     if (!provider) {
+      console.log('Provider not found for ID:', req.params.providerId);
       return res.status(404).json({ message: 'Provider not found' });
     }
 
-    res.json({
+    console.log('Provider found:', provider);
+    console.log('Provider profile:', provider.providerProfile);
+    
+    // Check if businessName exists
+    if (!provider.providerProfile || !provider.providerProfile.businessName) {
+      console.log('Business name not found in provider profile');
+      return res.json({
+        providerId: provider._id,
+        businessName: 'No business name available',
+        email: provider.email
+      });
+    }
+
+    const response = {
       providerId: provider._id,
       businessName: provider.providerProfile.businessName,
       email: provider.email
-    });
+    };
+    
+    console.log('Sending provider profile response:', response);
+    res.json(response);
   } catch (error) {
     console.error('Error fetching provider profile:', error);
     res.status(500).json({ message: 'Error fetching provider profile' });

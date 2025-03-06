@@ -138,10 +138,6 @@ const ProviderProfile = () => {
               <h1 className="text-3xl font-bold text-slate-900">
                 {provider.providerProfile.businessName}
               </h1>
-              <div className="mt-2 flex items-center text-slate-600">
-                <MapPin className="w-4 h-4 mr-2" />
-                Service area: {provider.providerProfile.serviceArea.radius} miles
-              </div>
             </div>
             <div className="mt-4 md:mt-0 space-x-4">
               <button

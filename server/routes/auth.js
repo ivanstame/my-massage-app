@@ -224,6 +224,12 @@ router.post('/register', ensureGuest, async (req, res) => {
     
     await user.save();
 
+    // For provider accounts, set providerId to their own _id if not set.
+    if (user.accountType === 'PROVIDER' && !user.providerId) {
+      user.providerId = user._id;
+      await user.save();
+    }
+    
     // If client registration successful with invitation, mark it accepted
     if (accountType === 'CLIENT' && invitationToken) {
       await Invitation.findOneAndUpdate(
@@ -246,11 +252,10 @@ router.post('/register', ensureGuest, async (req, res) => {
         if (accountType === 'CLIENT' && providerId) {
           userData.providerId = providerId;
           const provider = await User.findById(providerId)
-            .select('providerProfile.businessName providerProfile.serviceArea email');
+            .select('providerProfile.businessName email');
           if (provider) {
             providerInfo = {
               businessName: provider.providerProfile.businessName,
-              serviceArea: provider.providerProfile.serviceArea,
               email: provider.email
             };
           }

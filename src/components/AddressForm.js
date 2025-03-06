@@ -77,7 +77,7 @@ const AddressForm = ({ onAddressConfirmed, googleMapsLoaded }) => {
   };
 
   const handleUnitSubmit = () => {
-    const fullAddress = unitNumber 
+    const fullAddress = unitNumber
       ? `${addressDetails.formatted_address}, Unit ${unitNumber}`
       : addressDetails.formatted_address;
 
@@ -91,6 +91,12 @@ const AddressForm = ({ onAddressConfirmed, googleMapsLoaded }) => {
       state: addressDetails.components.administrative_area_level_1,
       zip: addressDetails.components.postal_code
     };
+
+    // Update addressDetails with fullAddress
+    setAddressDetails(prevDetails => ({
+      ...prevDetails,
+      fullAddress: fullAddress
+    }));
 
     onAddressConfirmed(finalAddress);
     setShowUnitPrompt(false);

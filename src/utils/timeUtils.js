@@ -88,7 +88,7 @@ const validateMultiSessionSlot = async (
     }
 
     // Move currentTime to the end of this session (no middle buffer)
-    currentTime = ${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')};
+    currentTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
   }
 
   // If all sessions fit, return true
@@ -136,8 +136,8 @@ function removeOccupiedSlots(
     const slotEnd = new Date(slotStart.getTime() + appointmentDurationMs);
 
     return !bookings.some(booking => {
-      const bookingStart = new Date(${booking.date.toISOString().split('T')[0]}T${booking.startTime});
-      const bookingEnd = new Date(${booking.date.toISOString().split('T')[0]}T${booking.endTime});
+      const bookingStart = new Date(`${booking.date.toISOString().split('T')[0]}T${booking.startTime}`);
+      const bookingEnd = new Date(`${booking.date.toISOString().split('T')[0]}T${booking.endTime}`);
 
       // Calculate a dynamic buffer
       const buffer = calculateBufferBetweenBookings(
@@ -193,53 +193,18 @@ async function validateSlots(
       const slotEnd = slotStart.plus({ minutes: appointmentDuration });
       const reversedBookings = [...bookings].reverse();
       const prevBooking = reversedBookings.find(booking =>
-        DateTime.fromISO(${booking.date.toISOString().split('T')[0]}T${booking.endTime}) <= slotStart
+        DateTime.fromISO(`${booking.date.toISOString().split('T')[0]}T${booking.endTime}`) <= slotStart
       );
       const nextBooking = bookings.find(booking =>
-        DateTime.fromISO(${booking.date.toISOString().split('T')[0]}T${booking.startTime}) > slotStart
+        DateTime.fromISO(`${booking.date.toISOString().split('T')[0]}T${booking.startTime}`) > slotStart
       );
 
-      // Check service area if provider specified
-      if (providerId && isValid) {
-        try {
-          // Validate travel from previous booking
-          if (prevBooking) {
-            const travelValid = await validateProviderTravel(
-              prevBooking.location,
-              clientLocation,
-              providerId
-            );
-            if (!travelValid) {
-              console.log('[Single-Session] Slot invalid: outside provider service area from previous booking');
-              isValid = false;
-              continue;
-            }
-          }
-
-          // Validate travel to next booking
-          if (nextBooking) {
-            const travelValid = await validateProviderTravel(
-              clientLocation,
-              nextBooking.location,
-              providerId
-            );
-            if (!travelValid) {
-              console.log('[Single-Session] Slot invalid: outside provider service area to next booking');
-              isValid = false;
-              continue;
-            }
-          }
-        } catch (error) {
-          console.error([Single-Session] Error validating service area for slot: ${slotStart.toISO()}, error);
-          isValid = false;
-          continue;
-        }
-      }
+      // Service area validation has been removed
 
       // Check arrival buffer from previous booking
       if (prevBooking && isValid) {
         const prevBookingEnd = DateTime.fromISO(
-          ${prevBooking.date.toISOString().split('T')[0]}T${prevBooking.endTime}
+          `${prevBooking.date.toISOString().split('T')[0]}T${prevBooking.endTime}`
         );
         const travelTimeFromPrev = await calculateTravelTime(
           prevBooking.location,
@@ -268,7 +233,7 @@ async function validateSlots(
         );
         const slotEndWithBuffer = slotEnd.plus({ minutes: dynamicBuffer });
         const nextBookingStart = DateTime.fromISO(
-          ${nextBooking.date.toISOString().split('T')[0]}T${nextBooking.startTime}
+          `${nextBooking.date.toISOString().split('T')[0]}T${nextBooking.startTime}`
         );
         const requiredDepartureTime = nextBookingStart.minus({ minutes: 15 });
 
@@ -284,7 +249,7 @@ async function validateSlots(
             isValid = false;
           }
         } catch (error) {
-          console.error([Single-Session] Error calculating travel time for slot: ${slotStart.toISO()}, error);
+          console.error('[Single-Session] Error calculating travel time for slot:', slotStart.toISO(), error);
           isValid = false;
         }
       }
@@ -321,8 +286,8 @@ async function getAvailableTimeSlots(
   });
   console.log('DEBUG: is Array?', Array.isArray(appointmentDuration));
 
-  const startTime = new Date(${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.start});
-  const endTime = new Date(${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.end});
+  const startTime = new Date(`${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.start}`);
+  const endTime = new Date(`${adminAvailability.date.toISOString().split('T')[0]}T${adminAvailability.end}`);
 
   const slots = generateTimeSlots(startTime, endTime, 30, appointmentDuration);
   console.log('DEBUG: generated base slots:', slots.map(s => s.toTimeString().slice(0,5)));
@@ -359,115 +324,4 @@ module.exports = {
   generateTimeSlots,
   removeOccupiedSlots,
   validateSlots
-};
-
-server/services/mapService.js:
-const axios = require('axios');
-const { User } = require('../models/User');
-
-const TRAFFIC_THRESHOLD_KM = 40; // Adjust this value as needed
-
-const isWithinServiceArea = (origin, destination, serviceArea) => {
-  if (!serviceArea || !serviceArea.radius || !serviceArea.center) {
-    return true; // No service area restrictions
-  }
-
-  // Calculate distance from service area center to destination
-  const R = 6371; // Earth's radius in km
-  const lat1 = serviceArea.center.lat * Math.PI / 180;
-  const lat2 = destination.lat * Math.PI / 180;
-  const dLat = (destination.lat - serviceArea.center.lat) * Math.PI / 180;
-  const dLon = (destination.lng - serviceArea.center.lng) * Math.PI / 180;
-
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-           Math.cos(lat1) * Math.cos(lat2) * 
-           Math.sin(dLon/2) * Math.sin(dLon/2);
-  
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  const distance = R * c;
-
-  return distance <= serviceArea.radius;
-};
-
-async function validateProviderTravel(origin, destination, providerId) {
-  try {
-    const provider = await User.findById(providerId);
-    if (!provider || provider.accountType !== 'PROVIDER') {
-      throw new Error('Invalid provider');
-    }
-
-    const serviceArea = provider.providerProfile?.serviceArea;
-    if (!isWithinServiceArea(origin, destination, serviceArea)) {
-      throw new Error('Location is outside provider service area');
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Provider travel validation error:', error);
-    throw error;
-  }
-}
-
-async function calculateTravelTime(origin, destination, departureTime, providerId) {
-  console.log('Calculating travel time:');
-  console.log('Origin:', JSON.stringify(origin));
-  console.log('Destination:', JSON.stringify(destination));
-  console.log('Departure Time:', departureTime);
-
-  try {
-    if (!origin || !destination || !departureTime) {
-      throw new Error('Missing required parameters for travel time calculation');
-    }
-
-    if (!origin.lat || !origin.lng || !destination.lat || !destination.lng) {
-      throw new Error('Invalid location data for travel time calculation');
-    }
-
-    // Validate provider service area if providerId is provided
-    if (providerId) {
-      await validateProviderTravel(origin, destination, providerId);
-    }
-
-    const response = await axios.get('https://maps.googleapis.com/maps/api/distancematrix/json', {
-      params: {
-        origins: ${origin.lat},${origin.lng},
-        destinations: ${destination.lat},${destination.lng},
-        mode: 'driving',
-        departure_time: Math.floor(departureTime.getTime() / 1000),
-        key: process.env.GOOGLE_MAPS_API_KEY
-      }
-    });
-
-    console.log('API Response:', JSON.stringify(response.data, null, 2));
-
-    if (response.data.status === 'OK' && response.data.rows[0].elements[0].status === 'OK') {
-      const distanceInMeters = response.data.rows[0].elements[0].distance.value;
-      const distanceInKm = distanceInMeters / 1000;
-      
-      let durationInSeconds;
-      if (distanceInKm > TRAFFIC_THRESHOLD_KM) {
-        durationInSeconds = response.data.rows[0].elements[0].duration_in_traffic.value;
-        console.log('Using traffic-aware duration for long distance');
-      } else {
-        durationInSeconds = response.data.rows[0].elements[0].duration.value;
-        console.log('Using standard duration for short distance');
-      }
-
-      const durationInMinutes = Math.ceil(durationInSeconds / 60);
-      console.log('Calculated duration:', durationInMinutes, 'minutes');
-      console.log('Distance:', distanceInKm.toFixed(2), 'km');
-      return durationInMinutes;
-    } else {
-      throw new Error(Unable to calculate travel time. API Status: ${response.data.status}, Element Status: ${response.data.rows[0].elements[0].status});
-    }
-  } catch (error) {
-    console.error('Error calculating travel time:', error);
-    throw error;
-  }
-}
-
-module.exports = {
-  calculateTravelTime,
-  validateProviderTravel,
-  isWithinServiceArea
 };

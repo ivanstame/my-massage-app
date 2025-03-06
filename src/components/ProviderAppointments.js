@@ -11,13 +11,6 @@ const ProviderAppointments = () => {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useContext(AuthContext);
-  const [serviceArea, setServiceArea] = useState(null);
-
-  useEffect(() => {
-    if (user?.providerProfile?.serviceArea) {
-      setServiceArea(user.providerProfile.serviceArea);
-    }
-  }, [user]);
 
   useEffect(() => {
     fetchAppointments();
@@ -67,25 +60,6 @@ const ProviderAppointments = () => {
     }
   };
 
-  const isOutsideServiceArea = (location) => {
-    if (!serviceArea || !serviceArea.center || !location) return false;
-    
-    // Calculate distance from service area center
-    const R = 6371; // Earth's radius in km
-    const lat1 = serviceArea.center.lat * Math.PI / 180;
-    const lat2 = location.lat * Math.PI / 180;
-    const dLat = (location.lat - serviceArea.center.lat) * Math.PI / 180;
-    const dLon = (location.lng - serviceArea.center.lng) * Math.PI / 180;
-
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-             Math.cos(lat1) * Math.cos(lat2) * 
-             Math.sin(dLon/2) * Math.sin(dLon/2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-
-    return distance > serviceArea.radius;
-  };
 
   const renderAppointment = (appointment) => (
     <div
@@ -114,12 +88,6 @@ const ProviderAppointments = () => {
               <div className="flex items-center text-slate-600">
                 <MapPin className="w-4 h-4 mr-2" />
                 <span>{appointment.location?.address}</span>
-                {isOutsideServiceArea(appointment.location) && (
-                  <span className="ml-2 text-amber-600 flex items-center">
-                    <AlertTriangle className="w-4 h-4 mr-1" />
-                    Outside service area
-                  </span>
-                )}
               </div>
             </div>
           </div>

@@ -1,25 +1,40 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../AuthContext';
-import { 
-  User, Phone, Mail, MapPin, Calendar, Clock, 
-  AlertCircle, MessageSquare, FileText, 
-  MoreHorizontal, Trash2 
+import {
+  User, Phone, Mail, MapPin, Calendar, Clock,
+  AlertCircle, MessageSquare, FileText,
+  MoreHorizontal, Trash2, Edit, DollarSign,
+  CheckCircle, Clock8, BarChart2, StickyNote
 } from 'lucide-react';
 import axios from 'axios';
 import moment from 'moment-timezone';
 
 const ProviderClientDetails = () => {
+  console.log('NEW ProviderClientDetails loaded');
   const { clientId } = useParams();
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  
+  // Helper function to format address
+  const formatAddress = (address) => {
+    if (!address) return '';
+    return `${address.street}${address.unit ? `, ${address.unit}` : ''}, ${address.city}, ${address.state} ${address.zip}`;
+  };
   
   const [client, setClient] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [serviceArea, setServiceArea] = useState(null);
+  const [showEditNotes, setShowEditNotes] = useState(false);
+  const [clientNotes, setClientNotes] = useState('');
+  const [stats, setStats] = useState({
+    totalAppointments: 0,
+    upcomingAppointments: 0,
+    completedAppointments: 0,
+    totalRevenue: 0
+  });
 
   useEffect(() => {
     if (user?.accountType !== 'PROVIDER') {
@@ -27,7 +42,6 @@ const ProviderClientDetails = () => {
       return;
     }
     
-    setServiceArea(user.providerProfile?.serviceArea);
     fetchClientDetails();
     fetchClientAppointments();
   }, [clientId, user]);
@@ -36,6 +50,12 @@ const ProviderClientDetails = () => {
     try {
       const response = await axios.get(`/api/users/provider/clients/${clientId}`);
       setClient(response.data);
+      console.log('Client data:', response.data);
+      
+      // Set client notes from the clientProfile field
+      if (response.data.clientProfile && response.data.clientProfile.notes) {
+        setClientNotes(response.data.clientProfile.notes);
+      }
     } catch (error) {
       console.error('Error fetching client details:', error);
       setError('Failed to load client details');
@@ -48,6 +68,33 @@ const ProviderClientDetails = () => {
         params: { clientId, providerId: user._id }
       });
       setAppointments(response.data);
+      
+      // Calculate statistics
+      if (response.data && response.data.length > 0) {
+        const now = new Date();
+        const upcoming = response.data.filter(apt => new Date(apt.date) > now && apt.status !== 'cancelled');
+        const completed = response.data.filter(apt => apt.status === 'completed');
+        
+        // Calculate total revenue (assuming each appointment has a price field)
+        // If price is not available, we'll use a default value based on duration
+        const revenue = response.data.reduce((total, apt) => {
+          if (apt.price) {
+            return total + apt.price;
+          } else if (apt.duration) {
+            // Estimate price based on duration if actual price not available
+            const hourlyRate = 100; // Default hourly rate
+            return total + (apt.duration / 60) * hourlyRate;
+          }
+          return total;
+        }, 0);
+        
+        setStats({
+          totalAppointments: response.data.length,
+          upcomingAppointments: upcoming.length,
+          completedAppointments: completed.length,
+          totalRevenue: revenue
+        });
+      }
     } catch (error) {
       console.error('Error fetching appointments:', error);
     } finally {
@@ -55,29 +102,6 @@ const ProviderClientDetails = () => {
     }
   };
 
-  const isOutsideServiceArea = () => {
-    if (!serviceArea?.center || !client?.profile?.address) return false;
-    
-    const location = {
-      lat: client.profile.address.lat,
-      lng: client.profile.address.lng
-    };
-
-    const R = 6371;
-    const lat1 = serviceArea.center.lat * Math.PI / 180;
-    const lat2 = location.lat * Math.PI / 180;
-    const dLat = (location.lat - serviceArea.center.lat) * Math.PI / 180;
-    const dLon = (location.lng - serviceArea.center.lng) * Math.PI / 180;
-
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-             Math.cos(lat1) * Math.cos(lat2) * 
-             Math.sin(dLon/2) * Math.sin(dLon/2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-
-    return distance > serviceArea.radius;
-  };
 
   const handleRemoveClient = async () => {
     try {
@@ -85,6 +109,28 @@ const ProviderClientDetails = () => {
       navigate('/provider/clients');
     } catch (error) {
       setError('Failed to remove client');
+    }
+  };
+  
+  const handleUpdateNotes = async () => {
+    try {
+      await axios.patch(`/api/users/provider/clients/${clientId}/notes`, {
+        notes: clientNotes
+      });
+      
+      // Update the client object with the new notes
+      setClient(prevClient => ({
+        ...prevClient,
+        clientProfile: {
+          ...prevClient.clientProfile,
+          notes: clientNotes
+        }
+      }));
+      
+      setShowEditNotes(false);
+    } catch (error) {
+      console.error('Error updating client notes:', error);
+      setError('Failed to update client notes');
     }
   };
 
@@ -107,6 +153,34 @@ const ProviderClientDetails = () => {
             className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
           >
             Remove Client
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  
+  const EditNotesModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 className="text-lg font-medium text-slate-900 mb-4">Edit Client Notes</h3>
+        <textarea
+          value={clientNotes}
+          onChange={(e) => setClientNotes(e.target.value)}
+          className="w-full p-3 border border-slate-300 rounded-md mb-4 h-40"
+          placeholder="Enter notes about this client..."
+        />
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={() => setShowEditNotes(false)}
+            className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-md"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleUpdateNotes}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Save Notes
           </button>
         </div>
       </div>
@@ -166,13 +240,7 @@ const ProviderClientDetails = () => {
                   {client?.profile?.address && (
                     <div className="flex items-center text-slate-600">
                       <MapPin className="w-4 h-4 mr-2" />
-                      {client.profile.address.formatted}
-                      {isOutsideServiceArea() && (
-                        <span className="ml-2 text-amber-600 flex items-center">
-                          <AlertCircle className="w-4 h-4 mr-1" />
-                          Outside service area
-                        </span>
-                      )}
+                      {formatAddress(client.profile.address)}
                     </div>
                   )}
                 </div>
@@ -200,6 +268,66 @@ const ProviderClientDetails = () => {
                   <MoreHorizontal className="w-5 h-5" />
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Client Stats Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mb-6">
+          <h2 className="text-lg font-medium text-slate-900 mb-4">Client Statistics</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <Calendar className="w-5 h-5 text-blue-500 mr-2" />
+                <h3 className="text-sm font-medium text-blue-700">Total Sessions</h3>
+              </div>
+              <p className="text-2xl font-bold text-blue-900">{stats.totalAppointments}</p>
+            </div>
+            
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <CheckCircle className="w-5 h-5 text-green-500 mr-2" />
+                <h3 className="text-sm font-medium text-green-700">Completed</h3>
+              </div>
+              <p className="text-2xl font-bold text-green-900">{stats.completedAppointments}</p>
+            </div>
+            
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <Clock8 className="w-5 h-5 text-purple-500 mr-2" />
+                <h3 className="text-sm font-medium text-purple-700">Upcoming</h3>
+              </div>
+              <p className="text-2xl font-bold text-purple-900">{stats.upcomingAppointments}</p>
+            </div>
+            
+            <div className="bg-amber-50 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <DollarSign className="w-5 h-5 text-amber-500 mr-2" />
+                <h3 className="text-sm font-medium text-amber-700">Revenue</h3>
+              </div>
+              <p className="text-2xl font-bold text-amber-900">${stats.totalRevenue.toFixed(2)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Client Notes Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium text-slate-900">Client Notes</h2>
+            <button
+              onClick={() => setShowEditNotes(true)}
+              className="text-[#387c7e] hover:text-[#2c5f60] flex items-center"
+            >
+              <Edit className="w-4 h-4 mr-1" />
+              Edit Notes
+            </button>
+          </div>
+          <div className="bg-slate-50 p-4 rounded-lg">
+            <div className="flex items-start">
+              <StickyNote className="w-5 h-5 text-slate-400 mr-2 mt-1" />
+              <p className="text-slate-700 whitespace-pre-wrap">
+                {client?.clientProfile?.notes || 'No notes added yet.'}
+              </p>
             </div>
           </div>
         </div>
@@ -240,29 +368,58 @@ const ProviderClientDetails = () => {
           ) : (
             <div className="space-y-4">
               {appointments.map(appointment => (
-                <div 
+                <div
                   key={appointment._id}
-                  className="flex justify-between items-center p-4 hover:bg-slate-50 rounded-lg"
+                  className="p-4 hover:bg-slate-50 rounded-lg border border-slate-100"
                 >
-                  <div className="flex items-start space-x-3">
-                    <Calendar className="w-5 h-5 text-slate-400" />
-                    <div>
-                      <div className="font-medium text-slate-900">
-                        {moment(appointment.date).format('dddd, MMMM D, YYYY')}
-                      </div>
-                      <div className="text-sm text-slate-500">
-                        {moment(appointment.startTime, 'HH:mm').format('h:mm A')} - 
-                        {moment(appointment.endTime, 'HH:mm').format('h:mm A')}
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-start space-x-3">
+                      <Calendar className="w-5 h-5 text-slate-400 mt-1" />
+                      <div>
+                        <div className="font-medium text-slate-900">
+                          {moment(appointment.date).format('dddd, MMMM D, YYYY')}
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          {moment(appointment.startTime, 'HH:mm').format('h:mm A')} -
+                          {moment(appointment.endTime, 'HH:mm').format('h:mm A')}
+                        </div>
                       </div>
                     </div>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        appointment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        appointment.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                        appointment.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                        'bg-slate-100 text-slate-800'
+                      }`}>
+                        {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                      </span>
+                      <button
+                        onClick={() => navigate(`/provider/appointments/${appointment._id}`)}
+                        className="text-slate-600 hover:text-slate-900"
+                      >
+                        <FileText className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => navigate(`/provider/appointments/${appointment._id}`)}
-                      className="text-slate-600 hover:text-slate-900"
-                    >
-                      <FileText className="w-5 h-5" />
-                    </button>
+                  
+                  <div className="mt-2 grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-slate-500">Duration:</span>
+                      <span className="ml-2 text-slate-700 font-medium">{appointment.duration} min</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Price:</span>
+                      <span className="ml-2 text-slate-700 font-medium">
+                        ${appointment.price ? appointment.price.toFixed(2) : ((appointment.duration / 60) * 100).toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Location:</span>
+                      <span className="ml-2 text-slate-700 font-medium truncate max-w-[150px] inline-block">
+                        {appointment.location?.address ? appointment.location.address.split(',')[0] : 'N/A'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -272,6 +429,7 @@ const ProviderClientDetails = () => {
       </div>
 
       {showDeleteConfirm && <DeleteConfirmationModal />}
+      {showEditNotes && <EditNotesModal />}
     </div>
   );
 };

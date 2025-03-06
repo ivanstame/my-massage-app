@@ -62,13 +62,6 @@ const ProfileSetup = () => {
     state: '',
     zip: '',
     businessName: '',
-    serviceArea: {
-      radius: 25,
-      center: {
-        lat: null,
-        lng: null
-      }
-    },
     allergies: '',
     medicalConditions: ''
   });
@@ -141,27 +134,6 @@ const ProfileSetup = () => {
     setError('');
 
     try {
-      let serviceAreaCenter = null;
-      if (user.accountType === 'PROVIDER') {
-        const geocoder = new window.google.maps.Geocoder();
-        const addressString = `${formData.street}, ${formData.city}, ${formData.state} ${formData.zip}`;
-
-        const { results } = await new Promise((resolve, reject) => {
-          geocoder.geocode({ address: addressString }, (results, status) => {
-            if (status === 'OK') resolve({ results, status });
-            else reject(new Error('Geocoding failed: ' + status));
-          });
-        });
-
-        if (!results[0]?.geometry?.location) {
-          throw new Error('Could not determine coordinates for address');
-        }
-
-        serviceAreaCenter = {
-          lat: results[0].geometry.location.lat(),
-          lng: results[0].geometry.location.lng()
-        };
-      }
 
       const response = await fetch('/api/users/profile', {
         method: 'PUT',
@@ -181,10 +153,6 @@ const ProfileSetup = () => {
             zip: formData.zip.trim()
           },
           businessName: formData.businessName.trim(),
-          serviceArea: {
-            ...formData.serviceArea,
-            center: serviceAreaCenter
-          },
           allergies: formData.allergies.trim(),
           medicalConditions: formData.medicalConditions.trim(),
           registrationStep: 2

@@ -54,7 +54,8 @@ const [provider, setProvider] = useState(null);
     basic: true,
     contact: true,
     medical: true,
-    treatment: true
+    treatment: true,
+    provider: true  // Add provider section to expanded sections
   });
   const [formData, setFormData] = useState({
     fullName: '',
@@ -127,16 +128,22 @@ const [provider, setProvider] = useState(null);
         // If this is a client, fetch provider info
         if (userData.accountType === 'CLIENT' && userData.providerId) {
           try {
+            console.log('Fetching provider data for providerId:', userData.providerId);
             const providerResponse = await fetch(`/api/users/provider/${userData.providerId}/profile`, {
               credentials: 'include'
             });
             
             if (providerResponse.ok) {
               const providerData = await providerResponse.json();
+              console.log('Provider data from API:', providerData);
               setProvider(providerData);
+            } else {
+              console.error('Error fetching provider details:', providerResponse.statusText);
+              setProvider({ error: 'Failed to load provider data' });
             }
           } catch (providerError) {
             console.error('Error fetching provider details:', providerError);
+            setProvider({ error: 'Failed to load provider data' });
           }
         }
         
@@ -160,6 +167,11 @@ const [provider, setProvider] = useState(null);
     console.log('Profile updated:', profile);
     console.log('FormData updated:', formData);
   }, [profile, formData]);
+
+  // Add debugging for provider data
+  useEffect(() => {
+    console.log('Provider data updated:', provider);
+  }, [provider]);
 
   const handleSectionEdit = (section) => {
     setEditingSections(prev => ({
@@ -493,23 +505,15 @@ const [provider, setProvider] = useState(null);
         <div className="flex justify-between items-center py-2 border-b border-slate-100">
           <span className="text-slate-500">Business Name</span>
           <span className="text-slate-900 font-medium">
-            {provider?.providerProfile?.businessName || 'Loading...'}
+            {provider?.error ? 'Error loading data' : (provider?.businessName || 'Loading...')}
           </span>
         </div>
         <div className="flex justify-between items-center py-2 border-b border-slate-100">
           <span className="text-slate-500">Contact Email</span>
           <span className="text-slate-900">
-            {provider?.email || 'Loading...'}
+            {provider?.error ? 'Error loading data' : (provider?.email || 'Loading...')}
           </span>
         </div>
-        {provider?.providerProfile?.serviceArea && (
-          <div className="flex justify-between items-center py-2 border-b border-slate-100">
-            <span className="text-slate-500">Service Area</span>
-            <span className="text-slate-900">
-              {provider.providerProfile.serviceArea.radius} mile radius
-            </span>
-          </div>
-        )}
         
         {/* Communication Buttons */}
         <div className="flex gap-3 mt-4">

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
 const Availability = require('../models/Availability');
+const User = require('../models/User');
 const { ensureAuthenticated } = require('../middleware/passportMiddleware');
 const { getAvailableTimeSlots } = require('../utils/timeUtils');
 const { calculateTravelTime } = require('../services/mapService');
@@ -46,17 +47,22 @@ router.post('/', ensureAuthenticated, async (req, res) => {
     const bookingDateLA = DateTime.fromISO(date, { zone: 'America/Los_Angeles' }).startOf('day');
     const bookingDate = bookingDateLA.toUTC().toJSDate();
 
-    const bookingStartTime = DateTime.fromISO(`${bookingDateLA.toFormat('yyyy-MM-dd')}T${time}`, { 
-      zone: 'America/Los_Angeles' 
-    }).toUTC().toJSDate();
-
-    const bookingEndTime = new Date(bookingStartTime.getTime() + duration * 60000);
-    const endTime = bookingEndTime.toTimeString().slice(0, 5);
+    // Create booking start time in LA timezone
+    const bookingStartTimeLA = DateTime.fromFormat(`${bookingDateLA.toFormat('yyyy-MM-dd')} ${time}`, 
+      'yyyy-MM-dd HH:mm', 
+      { zone: 'America/Los_Angeles' }
+    );
+    
+    // Convert to UTC for storage
+    const bookingStartTime = bookingStartTimeLA.toUTC().toJSDate();
+    
+    // Calculate end time
+    const bookingEndTimeLA = bookingStartTimeLA.plus({ minutes: duration });
+    const endTime = bookingEndTimeLA.toFormat('HH:mm');
 
     // Get availability for the day
     const availability = await Availability.findOne({
-      localDate: bookingDateLA.toFormat('yyyy-MM-dd'),
-      type: 'autobook'
+      localDate: bookingDateLA.toFormat('yyyy-MM-dd')
     });
 
     if (!availability) {
@@ -73,12 +79,18 @@ router.post('/', ensureAuthenticated, async (req, res) => {
       availability,
       existingBookings,
       location,
-      duration
+      duration,
+      15 // Default buffer minutes - TEMPORARY: Should be replaced with provider-specific value in the future
     );
 
-    const isSlotAvailable = availableSlots.some(
-      slot => slot.getTime() === bookingStartTime.getTime()
-    );
+    // Convert available slots to LA time strings for comparison
+    const availableTimeStrings = availableSlots.map(slot => {
+      const slotLA = DateTime.fromJSDate(slot).setZone('America/Los_Angeles');
+      return slotLA.toFormat('HH:mm');
+    });
+    
+    // Check if the requested time is in the available slots
+    const isSlotAvailable = availableTimeStrings.includes(time);
 
     if (!isSlotAvailable) {
       return res.status(400).json({ message: 'This time slot is no longer available' });
@@ -89,7 +101,8 @@ router.post('/', ensureAuthenticated, async (req, res) => {
       provider: providerId,
       client: clientId,
       date: bookingDate,
-      startTime: bookingStartTime,
+      localDate: bookingDateLA.toFormat('yyyy-MM-dd'),
+      startTime: time,
       endTime: endTime,
       duration,
       location: {
@@ -152,8 +165,7 @@ router.post('/bulk', ensureAuthenticated, async (req, res) => {
     
     // Get admin availability once for the date
     const availability = await Availability.findOne({
-      date: bookingDate,
-      type: 'autobook'
+      date: bookingDate
     });
 
     if (!availability) {
@@ -168,8 +180,13 @@ router.post('/bulk', ensureAuthenticated, async (req, res) => {
 
     // Validate all slots are available
     const validationPromises = bookingRequests.map(async (request, index) => {
-      const startTime = new Date(`${request.date}T${request.time}`);
-      const endTime = new Date(startTime.getTime() + request.duration * 60000);
+      // Create booking start time in LA timezone
+      const bookingDateLA = DateTime.fromISO(request.date, { zone: 'America/Los_Angeles' }).startOf('day');
+      const bookingStartTimeLA = DateTime.fromFormat(
+        `${bookingDateLA.toFormat('yyyy-MM-dd')} ${request.time}`, 
+        'yyyy-MM-dd HH:mm', 
+        { zone: 'America/Los_Angeles' }
+      );
 
       // Pass groupId and extraDepartureBuffer to availability check
       const availableSlots = await getAvailableTimeSlots(
@@ -182,9 +199,14 @@ router.post('/bulk', ensureAuthenticated, async (req, res) => {
         request.extraDepartureBuffer
       );
 
-      const isSlotAvailable = availableSlots.some(slot => 
-        slot.getTime() === startTime.getTime()
-      );
+      // Convert available slots to LA time strings for comparison
+      const availableTimeStrings = availableSlots.map(slot => {
+        const slotLA = DateTime.fromJSDate(slot).setZone('America/Los_Angeles');
+        return slotLA.toFormat('HH:mm');
+      });
+      
+      // Check if the requested time is in the available slots
+      const isSlotAvailable = availableTimeStrings.includes(request.time);
 
       if (!isSlotAvailable) {
         console.error(`Bulk booking failed: Slot not available for session ${index + 1}`);
@@ -202,18 +224,32 @@ router.post('/bulk', ensureAuthenticated, async (req, res) => {
 
     // Create all bookings
     const bookingPromises = bookingRequests.map((request, index) => {
-      const startTime = new Date(`${request.date}T${request.time}`);
-      const endTime = new Date(startTime.getTime() + request.duration * 60000);
+      // Create booking start time in LA timezone
+      const bookingDateLA = DateTime.fromISO(request.date, { zone: 'America/Los_Angeles' }).startOf('day');
+      const bookingStartTimeLA = DateTime.fromFormat(
+        `${bookingDateLA.toFormat('yyyy-MM-dd')} ${request.time}`, 
+        'yyyy-MM-dd HH:mm', 
+        { zone: 'America/Los_Angeles' }
+      );
+      
+      // Convert to UTC for storage
+      const bookingStartTime = bookingStartTimeLA.toUTC().toJSDate();
+      
+      // Calculate end time
+      const bookingEndTimeLA = bookingStartTimeLA.plus({ minutes: request.duration });
+      const endTime = bookingEndTimeLA.toFormat('HH:mm');
       
       const price = calculatePrice(request.duration);
 
       const booking = new Booking({
-        date: bookingDate,
-        startTime: startTime.toTimeString().slice(0, 5),
-        endTime: endTime.toTimeString().slice(0, 5),
+        provider: req.user.accountType === 'CLIENT' ? req.user.providerId : req.user._id,
+        client: req.user.id,
+        date: bookingDateLA.toUTC().toJSDate(),
+        localDate: bookingDateLA.toFormat('yyyy-MM-dd'),
+        startTime: request.time,
+        endTime: endTime,
         duration: request.duration,
         location: request.location,
-        client: req.user.id,
         price,
         groupId: request.groupId,
         isLastInGroup: index === bookingRequests.length - 1,
@@ -266,13 +302,34 @@ router.get('/', ensureAuthenticated, async (req, res) => {
       return res.json(stats);
     }
 
-    // Existing booking list logic
+    // Existing booking list logic with clientId filter support
     let bookings;
     
     if (req.user.accountType === 'PROVIDER') {
-      // Get all bookings for this provider's clients
-      bookings = await Booking.findForProvider(req.user._id)
-        .populate('client', 'email profile.fullName');
+      // If clientId is provided, filter bookings for that specific client
+      if (req.query.clientId) {
+        // Verify that the client belongs to this provider
+        const client = await User.findOne({
+          _id: req.query.clientId,
+          providerId: req.user._id
+        });
+        
+        if (!client) {
+          return res.status(403).json({ message: 'Client not found or not associated with this provider' });
+        }
+        
+        bookings = await Booking.find({
+          provider: req.user._id,
+          client: req.query.clientId
+        })
+        .populate('client', 'email profile.fullName clientProfile')
+        .sort({ date: 1, startTime: 1 });
+      } else {
+        // Get all bookings for this provider's clients
+        bookings = await Booking.findForProvider(req.user._id, new Date(0), new Date())
+          .populate('client', 'email profile.fullName')
+          .exec();
+      }
     } else if (req.user.accountType === 'CLIENT') {
       // Get only client's own bookings
       bookings = await Booking.find({ client: req.user._id })

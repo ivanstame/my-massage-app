@@ -25,13 +25,6 @@ const UserSchema = new mongoose.Schema({
   },
   providerProfile: {
     businessName: String,
-    serviceArea: {
-      radius: Number,
-      center: {
-        lat: Number,
-        lng: Number
-      }
-    },
     subscription: {
       plan: {
         type: String,
@@ -44,6 +37,17 @@ const UserSchema = new mongoose.Schema({
         default: 'ACTIVE'
       },
       expiresAt: Date
+    }
+  },
+  // Add the new clientProfile field here
+  clientProfile: {
+    notes: String,  // For storing client notes, preferences, special instructions
+    preferences: mongoose.Schema.Types.Mixed,  // Flexible field for client-specific options
+    stats: {
+      totalAppointments: { type: Number, default: 0 },
+      upcomingAppointments: { type: Number, default: 0 },
+      completedAppointments: { type: Number, default: 0 },
+      totalRevenue: { type: Number, default: 0 }
     }
   },
   isAdmin: {
@@ -110,6 +114,14 @@ UserSchema.pre('save', async function(next) {
   }
 });
 
+UserSchema.pre('save', function(next) {
+  // Automatically set providerId for new provider accounts
+  if (this.isNew && this.accountType === 'PROVIDER' && !this.providerId) {
+    this.providerId = this._id;
+  }
+  next();
+});
+
 // Password comparison for Passport
 UserSchema.methods.comparePassword = async function(candidatePassword) {
   try {
@@ -129,7 +141,6 @@ UserSchema.methods.updateLoginTimestamp = function() {
   this.lastLogin = new Date();
   return this.save();
 };
-
 // Public profile method
 UserSchema.methods.getPublicProfile = function() {
   const obj = this.toObject();
@@ -148,8 +159,23 @@ UserSchema.methods.getPublicProfile = function() {
     }
   }
 
+  // Initialize clientProfile if it doesn't exist for CLIENT users
+  if (this.accountType === 'CLIENT' && !obj.clientProfile) {
+    obj.clientProfile = {
+      notes: '',
+      preferences: {},
+      stats: {
+        totalAppointments: 0,
+        upcomingAppointments: 0,
+        completedAppointments: 0,
+        totalRevenue: 0
+      }
+    };
+  }
+
   return obj;
 };
+
 
 
 
@@ -158,6 +184,67 @@ UserSchema.methods.toJSON = function() {
   const obj = this.toObject();
   delete obj.password;
   return obj;
+};
+
+// Method to update client notes
+UserSchema.methods.updateClientNotes = async function(notes) {
+  if (!this.clientProfile) {
+    this.clientProfile = {
+      notes: '',
+      preferences: {},
+      stats: {
+        totalAppointments: 0,
+        upcomingAppointments: 0,
+        completedAppointments: 0,
+        totalRevenue: 0
+      }
+    };
+  }
+  
+  this.clientProfile.notes = notes;
+  return await this.save();
+};
+
+// Method to update client preferences
+UserSchema.methods.updateClientPreferences = async function(preferences) {
+  if (!this.clientProfile) {
+    this.clientProfile = {
+      notes: '',
+      preferences: {},
+      stats: {
+        totalAppointments: 0,
+        upcomingAppointments: 0,
+        completedAppointments: 0,
+        totalRevenue: 0
+      }
+    };
+  }
+  
+  this.clientProfile.preferences = preferences;
+  return await this.save();
+};
+
+// Method to update client stats
+UserSchema.methods.updateClientStats = async function(stats) {
+  if (!this.clientProfile) {
+    this.clientProfile = {
+      notes: '',
+      preferences: {},
+      stats: {
+        totalAppointments: 0,
+        upcomingAppointments: 0,
+        completedAppointments: 0,
+        totalRevenue: 0
+      }
+    };
+  }
+  
+  this.clientProfile.stats = {
+    ...this.clientProfile.stats,
+    ...stats
+  };
+  
+  return await this.save();
 };
 
 // Enhanced Profile update method

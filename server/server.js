@@ -47,12 +47,26 @@ app.use((req, res, next) => {
 });
 
 // Middleware setup - ORDER IS IMPORTANT
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Debug middleware for request body
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path === '/api/availability') {
+    console.log('DEBUG - Request body:', req.body);
+    console.log('DEBUG - Content-Type:', req.headers['content-type']);
+    console.log('DEBUG - Body type:', typeof req.body);
+    console.log('DEBUG - Body keys:', Object.keys(req.body));
+  }
+  next();
+});
 
 // CORS configuration
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5000',
+  'http://192.168.1.26:3000', // Explicit entry for the IP
+  'http://192.168.1.26:5000', // Explicit entry for the IP
   /^http:\/\/192\.168\.\d+\.\d+:(3000|5000)$/,
   'https://massagebyivan.com',
   'https://api.massagebyivan.com',
@@ -60,30 +74,29 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function(origin, callback) {
-    console.log('CORS Check - Origin:', origin);
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
     
-    if (!origin) {
+    // Check if the origin is in the allowed list
+    if (allowedOrigins.includes(origin) ||
+        (typeof allowedOrigins[0] === 'object' && allowedOrigins[0].test(origin))) {
       return callback(null, true);
     }
-
-    const isAllowed = allowedOrigins.some(allowedOrigin => {
-      if (allowedOrigin instanceof RegExp) {
-        return allowedOrigin.test(origin);
-      }
-      return allowedOrigin === origin;
-    });
-
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.log('Rejected Origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
+    
+    // Default to localhost:3000 in development or massagebyivan.com in production
+    const defaultOrigin = process.env.NODE_ENV === 'production'
+      ? 'https://massagebyivan.com'
+      : 'http://localhost:3000';
+    
+    callback(null, defaultOrigin);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 // Session middleware MUST come before passport
 app.use(session({
@@ -95,10 +108,15 @@ app.use(session({
     collectionName: 'sessions'
   }),
   cookie: {
-    secure: false,
+    // In production, secure should be true when sameSite is 'none'
+    // In development, we need to allow non-secure cookies
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000
+    // Use 'lax' for same-site requests, 'none' for cross-site
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000,
+    // Allow cookies from any domain in development
+    domain: process.env.NODE_ENV === 'production' ? undefined : ''
   }
 }));
 
@@ -113,6 +131,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/geocode', geocodeRoutes);
 app.use('/api/invitations', require('./routes/invitations'));
+app.use('/api', require('./routes/direct-access')); // Add direct access routes
 
 // Provider-specific routes and rate limiting
 const providerApiLimiter = rateLimit({
@@ -127,8 +146,9 @@ app.use('/api/provider/availability', require('./routes/availability'));
 app.use('/api/provider/bookings', require('./routes/bookings'));
 
 // Global error handler
+// Enhanced error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('[Global Error Handler]', err.stack);
   
   // Handle provider-specific errors
   if (err.name === 'ProviderValidationError') {

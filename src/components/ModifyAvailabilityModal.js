@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, MapPin, AlertCircle } from 'lucide-react';
+import { Clock, AlertCircle } from 'lucide-react';
 import { DateTime } from 'luxon';
-import { DEFAULT_TZ, TIME_FORMATS } from '../../shared/utils/timeConstants';
-import LuxonService from '../../shared/utils/LuxonService';
+import { DEFAULT_TZ, TIME_FORMATS } from '../utils/timeConstants';
+import LuxonService from '../utils/LuxonService';
 
-const ModifyAvailabilityModal = ({ block, onModify, onClose, serviceArea }) => {
+const ModifyAvailabilityModal = ({ block, onModify, onClose }) => {
   const [startTime, setStartTime] = useState('09:00 AM');
   const [endTime, setEndTime] = useState('05:00 PM');
-  const [type, setType] = useState('autobook');
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -23,7 +22,6 @@ const ModifyAvailabilityModal = ({ block, onModify, onClose, serviceArea }) => {
     if (block) {
       setStartTime(convert24to12(block.start));
       setEndTime(convert24to12(block.end));
-      setType(block.type);
     }
   }, [block]);
 
@@ -61,9 +59,7 @@ const ModifyAvailabilityModal = ({ block, onModify, onClose, serviceArea }) => {
     onModify({
       ...block,
       start: to24Hour(startTime),
-      end: to24Hour(endTime),
-      type,
-      serviceArea
+      end: to24Hour(endTime)
     });
   };
 
@@ -73,12 +69,6 @@ const ModifyAvailabilityModal = ({ block, onModify, onClose, serviceArea }) => {
       <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
         <div className="flex justify-between items-start mb-4">
           <h2 className="text-xl font-bold text-slate-900">Modify Availability</h2>
-          {serviceArea && (
-            <div className="flex items-center text-sm text-slate-500">
-              <MapPin className="w-4 h-4 mr-1" />
-              {serviceArea.radius} mile radius
-            </div>
-          )}
         </div>
 
         {error && (
@@ -117,20 +107,6 @@ const ModifyAvailabilityModal = ({ block, onModify, onClose, serviceArea }) => {
             </select>
           </div>
 
-          <div>
-            <label htmlFor="type" className="block text-sm font-medium text-slate-700 mb-1">
-              Availability Type
-            </label>
-            <select
-              id="type"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="w-full border rounded-md p-2 focus:ring-[#387c7e] focus:border-[#387c7e]"
-            >
-              <option value="autobook">Auto-book (Clients can book directly)</option>
-              <option value="unavailable">Unavailable (Blocked time)</option>
-            </select>
-          </div>
 
           <div className="flex justify-end space-x-3 pt-4">
             <button
