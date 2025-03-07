@@ -8,6 +8,10 @@ const { getAvailableTimeSlots } = require('../utils/timeUtils');
 const { calculateTravelTime } = require('../services/mapService');
 const { DateTime } = require('luxon');
 
+// Valid massage types and add-ons for validation
+const VALID_MASSAGE_TYPES = ['focused', 'deep', 'relaxation'];
+const VALID_ADDONS = ['theragun', 'hotstone', 'bamboo', 'stretching'];
+
 
 // Calculate price helper
 const calculatePrice = (duration) => {
@@ -96,6 +100,33 @@ router.post('/', ensureAuthenticated, async (req, res) => {
       return res.status(400).json({ message: 'This time slot is no longer available' });
     }
 
+    // Validate massage type if provided
+    if (req.body.massageType) {
+      if (!VALID_MASSAGE_TYPES.includes(req.body.massageType.id)) {
+        return res.status(400).json({ 
+          message: `Invalid massage type: ${req.body.massageType.id}. Valid types are: ${VALID_MASSAGE_TYPES.join(', ')}` 
+        });
+      }
+    }
+    
+    // Validate add-ons if provided
+    if (req.body.addons && Array.isArray(req.body.addons)) {
+      for (const addon of req.body.addons) {
+        if (!VALID_ADDONS.includes(addon.id)) {
+          return res.status(400).json({ 
+            message: `Invalid add-on: ${addon.id}. Valid add-ons are: ${VALID_ADDONS.join(', ')}` 
+          });
+        }
+        
+        // Validate price is a positive number
+        if (typeof addon.price !== 'number' || addon.price < 0) {
+          return res.status(400).json({ 
+            message: `Invalid price for add-on ${addon.id}: ${addon.price}. Price must be a positive number.` 
+          });
+        }
+      }
+    }
+    
     // Create booking
     const booking = new Booking({
       provider: providerId,
@@ -110,7 +141,41 @@ router.post('/', ensureAuthenticated, async (req, res) => {
         lng: location.lng,
         address: location.address
       },
-      price: calculatePrice(duration)
+      // Add massage type if provided
+      ...(req.body.massageType && {
+        massageType: {
+          id: req.body.massageType.id,
+          name: req.body.massageType.name
+        }
+      }),
+      // Add add-ons if provided
+      ...(req.body.addons && {
+        addons: req.body.addons.map(addon => ({
+          id: addon.id,
+          name: addon.name,
+          price: addon.price,
+          extraTime: addon.extraTime || 0
+        }))
+      }),
+      // Add pricing if provided
+      ...(req.body.pricing && {
+        pricing: {
+          basePrice: req.body.pricing.basePrice || calculatePrice(duration),
+          addonsPrice: req.body.pricing.addonsPrice || 0,
+          totalPrice: req.body.pricing.totalPrice || calculatePrice(duration)
+        }
+      }),
+      // Add recipient information if provided
+      ...(req.body.recipientType && {
+        recipientType: req.body.recipientType
+      }),
+      ...(req.body.recipientType === 'other' && req.body.recipientInfo && {
+        recipientInfo: {
+          name: req.body.recipientInfo.name,
+          phone: req.body.recipientInfo.phone,
+          email: req.body.recipientInfo.email || ''
+        }
+      })
     });
 
     await booking.save();
@@ -253,7 +318,18 @@ router.post('/bulk', ensureAuthenticated, async (req, res) => {
         price,
         groupId: request.groupId,
         isLastInGroup: index === bookingRequests.length - 1,
-        extraDepartureBuffer: request.extraDepartureBuffer
+        extraDepartureBuffer: request.extraDepartureBuffer,
+        // Add recipient information if provided
+        ...(request.recipientType && {
+          recipientType: request.recipientType
+        }),
+        ...(request.recipientType === 'other' && request.recipientInfo && {
+          recipientInfo: {
+            name: request.recipientInfo.name,
+            phone: request.recipientInfo.phone,
+            email: request.recipientInfo.email || ''
+          }
+        })
       });
 
       return booking.save();

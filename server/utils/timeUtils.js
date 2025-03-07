@@ -415,6 +415,7 @@ async function validateSlots(
  * @param {string} [requestedGroupId=null] - Group ID for multi-session bookings
  * @param {number} [extraDepartureBuffer=0] - Additional buffer time for departure
  * @param {string} [providerId=null] - Provider ID for validation
+ * @param {Array} [addons=[]] - Array of add-ons that might add extra time to the appointment
  * @returns {Promise<Array>} - Array of available time slots
  */
 async function getAvailableTimeSlots(
@@ -425,7 +426,8 @@ async function getAvailableTimeSlots(
   bufferMinutes = 15, // Default to 15 minutes if not provided
   requestedGroupId = null,
   extraDepartureBuffer = 0,
-  providerId = null
+  providerId = null,
+  addons = []
 ) {
   // Ensure bufferMinutes is a number to prevent NaN errors in calculations
   const effectiveBufferMinutes = typeof bufferMinutes === 'number' ? bufferMinutes : 15;
@@ -435,9 +437,26 @@ async function getAvailableTimeSlots(
     appointmentDuration,
     bufferMinutes: effectiveBufferMinutes,
     requestedGroupId,
-    extraDepartureBuffer
+    extraDepartureBuffer,
+    addons
   });
   console.log('DEBUG: is Array?', Array.isArray(appointmentDuration));
+  
+  // Calculate extra time from add-ons
+  let extraTimeFromAddons = 0;
+  if (addons && addons.length > 0) {
+    extraTimeFromAddons = addons.reduce((total, addon) => {
+      return total + (addon.extraTime || 0);
+    }, 0);
+    
+    console.log('DEBUG: Extra time from add-ons:', extraTimeFromAddons);
+    
+    // Add extra time to appointment duration
+    if (!Array.isArray(appointmentDuration) && extraTimeFromAddons > 0) {
+      appointmentDuration += extraTimeFromAddons;
+      console.log('DEBUG: Updated appointment duration with add-ons:', appointmentDuration);
+    }
+  }
 
   // Handle different types of Availability objects
   // Ensure we always get proper DateTime objects for date, start, and end

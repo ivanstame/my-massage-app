@@ -28,6 +28,7 @@ import Login from './components/Login';
 import SignUp from './components/SignUp';
 import ProfileSetup from './components/ProfileSetup';
 import BookingForm from './components/BookingForm';
+import BookingFormUpdated from './components/BookingForm_updated';
 import BookingList from './components/BookingList';
 
 // Import new provider components
@@ -148,6 +149,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <BookingForm googleMapsLoaded={googleMapsLoaded} />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route 
+            path="/book2" 
+            element={
+              <ProtectedRoute>
+                <BookingFormUpdated googleMapsLoaded={googleMapsLoaded} />
               </ProtectedRoute>
             }
           />

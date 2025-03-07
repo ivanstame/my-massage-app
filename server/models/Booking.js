@@ -88,6 +88,35 @@ const BookingSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Massage type for single-session bookings
+  massageType: {
+    id: { type: String },
+    name: { type: String }
+  },
+  // Add-ons for single-session bookings
+  addons: [{
+    id: { type: String },
+    name: { type: String },
+    price: { type: Number },
+    extraTime: { type: Number, default: 0 }
+  }],
+  // Pricing information
+  pricing: {
+    basePrice: { type: Number },
+    addonsPrice: { type: Number },
+    totalPrice: { type: Number }
+  },
+  // Recipient information
+  recipientType: {
+    type: String,
+    enum: ['self', 'other'],
+    default: 'self'
+  },
+  recipientInfo: {
+    name: { type: String },
+    phone: { type: String },
+    email: { type: String }
+  },
   status: { 
     type: String, 
     enum: ['pending', 'confirmed', 'in-progress', 'completed', 'cancelled'],

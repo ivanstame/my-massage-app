@@ -175,6 +175,18 @@ router.get('/available/:date', validateAvailabilityInput, async (req, res) => {
       JSON.parse(req.query.sessionDurations) :
       [appointmentDuration];
     
+    // Parse add-ons if provided
+    let addons = [];
+    if (req.query.addons) {
+      try {
+        addons = JSON.parse(req.query.addons);
+        console.log('Parsed add-ons:', addons);
+      } catch (err) {
+        console.error('Error parsing add-ons:', err);
+        // Continue without add-ons if parsing fails
+      }
+    }
+    
     // Get available slots using the shared validation function
     const availableSlots = await getAvailableTimeSlots(
       availability,
@@ -184,7 +196,8 @@ router.get('/available/:date', validateAvailabilityInput, async (req, res) => {
       bufferTime,
       null, // requestedGroupId
       0,    // extraDepartureBuffer
-      providerId
+      providerId,
+      addons // Pass add-ons to the function
     );
     
     console.log(`Available slots: ${availableSlots.length} with shared validation logic`);

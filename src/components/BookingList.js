@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../AuthContext';
-import { Calendar, MapPin, Clock, AlertCircle, Phone, MessageSquare } from 'lucide-react';
+import { Calendar, MapPin, Clock, AlertCircle, Phone, MessageSquare, Tag, DollarSign } from 'lucide-react';
 import { DateTime } from 'luxon';
 import { DEFAULT_TZ, TIME_FORMATS } from '../utils/timeConstants';
 import LuxonService from '../utils/LuxonService';
+import { getMassageTypeName } from '../shared/constants/massageOptions';
 
 
 const BookingList = () => {
@@ -177,6 +178,39 @@ const BookingList = () => {
                 <MapPin className="w-4 h-4 mr-2" />
                 <span>{booking.location?.address || 'Unknown'}</span>
               </div>
+              
+              {/* Display massage type if available */}
+              {booking.massageType && (
+                <div className="flex items-center text-slate-600">
+                  <Tag className="w-4 h-4 mr-2" />
+                  <span>{booking.massageType.name || getMassageTypeName(booking.massageType.id)}</span>
+                </div>
+              )}
+              
+              {/* Display add-ons if available */}
+              {booking.addons && booking.addons.length > 0 && (
+                <div className="flex items-start text-slate-600">
+                  <div className="flex-shrink-0 mt-1">
+                    <Tag className="w-4 h-4 mr-2" />
+                  </div>
+                  <div>
+                    <span className="font-medium">Add-ons:</span>
+                    <ul className="list-disc list-inside pl-2 text-sm">
+                      {booking.addons.map(addon => (
+                        <li key={addon.id}>{addon.name} (+${addon.price})</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+              
+              {/* Display pricing if available */}
+              {booking.pricing && (
+                <div className="flex items-center text-slate-600 font-medium">
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  <span>Total: ${booking.pricing.totalPrice}</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center space-x-2">
